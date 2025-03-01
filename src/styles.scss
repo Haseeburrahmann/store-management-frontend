@@ -1,1 +1,141 @@
-/* You can add global styles to this file, and also import other style files */
+// styles.scss - with Modern Indigo theme
+
+// Import Angular Material theming
+@use '@angular/material' as mat;
+
+// Include the common styles for Angular Material
+@include mat.core();
+
+// Import fonts
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+// Define Modern Indigo theme palette
+$store-primary: mat.define-palette(mat.$indigo-palette, 600);
+$store-accent: mat.define-palette(mat.$cyan-palette, A200, A100, A400);
+$store-warn: mat.define-palette(mat.$red-palette);
+
+// Create the theme
+$store-theme: mat.define-light-theme((
+  color: (
+    primary: $store-primary,
+    accent: $store-accent,
+    warn: $store-warn,
+  ),
+  typography: mat.define-typography-config(
+    $font-family: 'Inter, sans-serif',
+  ),
+  density: 0,
+));
+
+// Include theme styles
+@include mat.all-component-themes($store-theme);
+
+// Custom theme variables
+:root {
+  --primary-color: #3949ab;
+  --primary-light: #6f74dd;
+  --primary-dark: #00227b;
+  --accent-color: #00e5ff;
+  --text-color: #263238;
+  --background-color: #f8f9fa;
+  --sidebar-color: #ffffff;
+  --card-color: #ffffff;
+  --border-radius: 8px;
+  --box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+// Global styles
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--text-color);
+  background-color: var(--background-color);
+}
+
+// Layout components
+.app-header {
+  background-color: var(--primary-color);
+  color: white;
+  padding: 0.5rem 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.app-sidebar {
+  background-color: var(--sidebar-color);
+  border-right: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+}
+
+.dashboard-card {
+  background-color: var(--card-color);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  box-shadow: var(--box-shadow);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  }
+}
+
+.stats-card {
+  border-left: 4px solid var(--primary-color);
+}
+
+// Utility classes
+.full-width {
+  width: 100%;
+}
+
+.container {
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.gap-4 {
+  gap: 1rem;
+}
+
+.mb-4 {
+  margin-bottom: 1rem;
+}
+
+.mt-4 {
+  margin-top: 1rem;
+}
+
+.p-4 {
+  padding: 1rem;
+}
