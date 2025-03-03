@@ -1,20 +1,11 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, of } from 'rxjs';
-import { catchError, map, tap } from 'rxjs/operators';
-import { JwtHelperService } from '@auth0/angular-jwt';
-
+import { Observable, BehaviorSubject, tap } from 'rxjs';
+import { Router } from '@angular/router';
+import { User, UserCreate, UserWithPermissions } from '../models/user.model';
 import { environment } from '../../../../environments/environment';
 
-export interface User {
-  id: string;
-  email: string;
-  full_name?: string;
-  role: string;
-  is_active: boolean;
-}
-
-export interface AuthResponse {
+interface AuthResponse {
   access_token: string;
   token_type: string;
 }
@@ -24,23 +15,13 @@ export interface AuthResponse {
 })
 export class AuthService {
   private apiUrl = `${environment.apiUrl}/auth`;
-  private currentUserSubject = new BehaviorSubject<User | null>(null);
-  public currentUser$ = this.currentUserSubject.asObservable();
-  
-  constructor(
-    private http: HttpClient,
-    private jwtHelper: JwtHelperService
-  ) {
-    this.loadToken();
+  private userSubject = new BehaviorSubject<UserWithPermissions | null>(null);
+  public user$ = this.userSubject.asObservable();
+
+  constructor(private http: HttpClient, private router: Router) {
+    this.loadUser();
   }
-  
-  private loadToken() {
-    const token = localStorage.getItem('access_token');
-    if (token && !this.jwtHelper.isTokenExpired(token)) {
-      this.getUserProfile().subscribe();
-    }
-  }
-  
+
   login(email: string, password: string): Observable<AuthResponse> {
     const formData = new FormData();
     formData.append('username', email);
@@ -50,40 +31,53 @@ export class AuthService {
       .pipe(
         tap(response => {
           localStorage.setItem('access_token', response.access_token);
-          this.getUserProfile().subscribe();
+          this.loadUserProfile();
         })
       );
   }
-  
-  register(userData: any): Observable<User> {
+
+  register(userData: UserCreate): Observable<User> {
     return this.http.post<User>(`${this.apiUrl}/register`, userData);
   }
-  
-  getUserProfile(): Observable<User> {
-    return this.http.get<User>(`${this.apiUrl}/me`)
-      .pipe(
-        tap(user => {
-          this.currentUserSubject.next(user);
-        }),
-        catchError(error => {
-          this.logout();
-          return of(error);
-        })
-      );
-  }
-  
+
   logout(): void {
     localStorage.removeItem('access_token');
-    this.currentUserSubject.next(null);
+    this.userSubject.next(null);
+    this.router.navigate(['/login']);
   }
-  
+
+  loadUserProfile(): void {
+    if (this.isAuthenticated()) {
+      this.http.get<UserWithPermissions>(`${this.apiUrl}/me`)
+        .subscribe({
+          next: (user) => this.userSubject.next(user),
+          error: () => {
+            localStorage.removeItem('access_token');
+            this.userSubject.next(null);
+          }
+        });
+    }
+  }
+
+  public loadUser(): void {
+    if (this.isAuthenticated()) {
+      this.loadUserProfile();
+    }
+  }
+
   isAuthenticated(): boolean {
-    const token = localStorage.getItem('access_token');
-    return token !== null && !this.jwtHelper.isTokenExpired(token);
+    return !!localStorage.getItem('access_token');
   }
-  
-  hasRole(role: string): boolean {
-    const user = this.currentUserSubject.value;
-    return user !== null && user.role === role;
+
+  getToken(): string | null {
+    return localStorage.getItem('access_token');
+  }
+
+  public hasPermission(permission: string): boolean {
+    const user = this.userSubject.value;
+    if (!user || !user.permissions) {
+      return false;
+    }
+    return user.permissions.includes(permission);
   }
 }
