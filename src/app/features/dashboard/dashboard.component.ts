@@ -4,14 +4,14 @@ import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { Router } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
 
 import { AuthService } from '../../core/auth/services/auth.service';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, MatCardModule, MatButtonModule, MatIconModule],
+  imports: [CommonModule, MatCardModule, MatButtonModule, MatIconModule,RouterModule],
   template: `
     <div class="dashboard-container">
       <!-- Header -->
@@ -37,14 +37,13 @@ import { AuthService } from '../../core/auth/services/auth.service';
             </div>
             
             <nav class="sidebar-nav">
-              <a class="nav-item active">Dashboard</a>
-              <a class="nav-item">Employees</a>
-              <a class="nav-item">Hours Tracking</a>
-              <a class="nav-item">Payments</a>
-              <a class="nav-item">Inventory</a>
-              <a class="nav-item">Sales</a>
-              <a class="nav-item">Settings</a>
-            </nav>
+  <a class="nav-item" routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+  <a class="nav-item" routerLink="/users" routerLinkActive="active">Users</a>
+  <a class="nav-item" routerLink="/roles" routerLinkActive="active">Roles</a>
+  <a class="nav-item" routerLink="/profile" routerLinkActive="active">My Profile</a>
+  <!-- Other navigation items -->
+</nav>
+
           </div>
         </aside>
         
@@ -375,10 +374,10 @@ export class DashboardComponent {
   user: any;
   
   constructor(
-    private authService: AuthService,
+    public authService: AuthService,
     private router: Router
   ) {
-    this.authService.currentUser$.subscribe(user => {
+    this.authService.user$.subscribe((user: any) => {
       this.user = user;
     });
   }

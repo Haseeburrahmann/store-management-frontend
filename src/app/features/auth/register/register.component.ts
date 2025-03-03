@@ -63,6 +63,10 @@ import { AuthService } from '../../../core/auth/services/auth.service';
                   </mat-error>
                 }
               </mat-form-field>
+              <mat-form-field appearance="outline" class="full-width">
+  <mat-label>Phone Number</mat-label>
+  <input matInput formControlName="phone_number">
+</mat-form-field>
             </div>
             
             @if (error) {
@@ -127,7 +131,7 @@ import { AuthService } from '../../../core/auth/services/auth.service';
 export class RegisterComponent {
   registerForm: FormGroup;
   error: string = '';
-  
+
   constructor(
     private fb: FormBuilder,
     private authService: AuthService,
@@ -135,23 +139,24 @@ export class RegisterComponent {
   ) {
     this.registerForm = this.fb.group({
       email: ['', [Validators.required, Validators.email]],
-      full_name: [''],
+      full_name: ['', Validators.required],
+      phone_number: [''], // Add phone number field
       password: ['', [Validators.required, Validators.minLength(6)]],
       confirmPassword: ['', Validators.required]
     }, { validator: this.checkPasswords });
   }
-  
+
   checkPasswords(group: FormGroup) {
     const password = group.get('password')?.value;
     const confirmPassword = group.get('confirmPassword')?.value;
-    
+
     return password === confirmPassword ? null : { notMatching: true };
   }
-  
+
   onSubmit(): void {
     if (this.registerForm.valid) {
       const { email, full_name, password } = this.registerForm.value;
-      
+
       this.authService.register({ email, full_name, password }).subscribe({
         next: () => {
           this.router.navigate(['/login']);
