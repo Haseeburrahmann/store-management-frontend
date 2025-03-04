@@ -1,0 +1,84 @@
+/* src/app/features/employee-management/employee-detail/employee-detail.component.scss */
+.employee-detail-container {
+    padding: 16px;
+  }
+  
+  .header-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  
+  .spacer {
+    flex: 1;
+  }
+  
+  .tab-content {
+    padding: 16px;
+  }
+  
+  .info-row {
+    display: flex;
+    margin-bottom: 12px;
+    align-items: center;
+  }
+  
+  .info-label {
+    min-width: 150px;
+    font-weight: 500;
+    color: rgba(0, 0, 0, 0.7);
+  }
+  
+  .info-value {
+    flex: 1;
+  }
+  
+  .store-select {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .store-select mat-form-field {
+    width: 200px;
+  }
+  
+  .loading-spinner {
+    display: flex;
+    justify-content: center;
+    margin: 40px 0;
+  }
+  
+  .not-found {
+    text-align: center;
+  }
+  
+  .not-found-message {
+    padding: 32px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .not-found-message mat-icon {
+    font-size: 48px;
+    height: 48px;
+    width: 48px;
+    color: #f44336;
+  }
+  
+  .status-active {
+    color: green;
+    font-weight: 500;
+  }
+  
+  .status-on-leave {
+    color: orange;
+    font-weight: 500;
+  }
+  
+  .status-terminated {
+    color: red;
+    font-weight: 500;
+  }

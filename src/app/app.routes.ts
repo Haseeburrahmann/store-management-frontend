@@ -57,7 +57,7 @@ export const routes: Routes = [
     loadComponent: () => import('./features/user-management/role-detail/role-detail.component').then(m => m.RoleDetailComponent),
     canActivate: [AuthGuard]
   },
-  // Add store routes
+  // Store routes
   {
     path: 'stores',
     loadComponent: () => import('./features/store-management/store-list/store-list.component').then(m => m.StoreListComponent),
@@ -76,6 +76,27 @@ export const routes: Routes = [
   {
     path: 'stores/:id/edit',
     loadComponent: () => import('./features/store-management/store-form/store-form.component').then(m => m.StoreFormComponent),
+    canActivate: [AuthGuard]
+  },
+  // Employee routes (new)
+  {
+    path: 'employees',
+    loadComponent: () => import('./features/employee-management/employee-list/employee-list.component').then(m => m.EmployeeListComponent),
+    canActivate: [AuthGuard]
+  },
+  {
+    path: 'employees/new',
+    loadComponent: () => import('./features/employee-management/employee-form/employee-form.component').then(m => m.EmployeeFormComponent),
+    canActivate: [AuthGuard]
+  },
+  {
+    path: 'employees/:id',
+    loadComponent: () => import('./features/employee-management/employee-detail/employee-detail.component').then(m => m.EmployeeDetailComponent),
+    canActivate: [AuthGuard]
+  },
+  {
+    path: 'employees/:id/edit',
+    loadComponent: () => import('./features/employee-management/employee-form/employee-form.component').then(m => m.EmployeeFormComponent),
     canActivate: [AuthGuard]
   },
   {

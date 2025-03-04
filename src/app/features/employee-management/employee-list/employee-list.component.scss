@@ -1,0 +1,61 @@
+/* src/app/features/employee-management/employee-list/employee-list.component.scss */
+.employee-list-container {
+    padding: 16px;
+  }
+  
+  .filter-section {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+  
+  .filter-section mat-form-field {
+    flex: 1;
+    min-width: 200px;
+  }
+  
+  .table-container {
+    overflow-x: auto;
+  }
+  
+  table {
+    width: 100%;
+  }
+  
+  .status-active {
+    color: green;
+    font-weight: 500;
+  }
+  
+  .status-on-leave {
+    color: orange;
+    font-weight: 500;
+  }
+  
+  .status-terminated {
+    color: red;
+    font-weight: 500;
+  }
+  
+  .loading-spinner {
+    display: flex;
+    justify-content: center;
+    margin: 20px 0;
+  }
+  
+  .no-results {
+    text-align: center;
+    margin: 20px 0;
+    color: rgba(0, 0, 0, 0.54);
+  }
+  
+  .mat-mdc-card-header {
+    padding: 16px;
+  }
+  
+  .mat-mdc-card-title {
+    font-size: 24px;
+    margin-bottom: 0;
+  }
