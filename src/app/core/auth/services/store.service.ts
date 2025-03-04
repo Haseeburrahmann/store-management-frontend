@@ -1,7 +1,7 @@
 // src/app/core/services/store.service.ts
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, tap } from 'rxjs';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { map, Observable, tap } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { Store, StoreCreate, StoreUpdate } from '../../../shared/models/store.model';
 
@@ -13,26 +13,32 @@ export class StoreService {
 
   constructor(private http: HttpClient) { }
 
-  getStores(
-    skip: number = 0, 
-    limit: number = 10, 
-    name?: string, 
-    city?: string, 
-    manager_id?: string
-  ): Observable<Store[]> {
-    let url = `${this.apiUrl}?skip=${skip}&limit=${limit}`;
-    
-    if (name) url += `&name=${name}`;
-    if (city) url += `&city=${city}`;
-    if (manager_id) url += `&manager_id=${manager_id}`;
-    
-    // Add a refresh timestamp to force reload and prevent caching
-    url += `&_t=${new Date().getTime()}`;
-    
-    return this.http.get<Store[]>(url).pipe(
-      tap(stores => console.log('Fetched stores:', stores))
-    );
-  }
+  // Your store service might need fixing like this:
+ // In store.service.ts
+// src/app/core/services/store.service.ts
+// src/app/core/services/store.service.ts
+getStores(search?: number, status?: number, skip?: string, limit?: string): Observable<any[]> {
+  let params = new HttpParams();
+  
+  // Add params as needed...
+  
+  return this.http.get<any[]>(`${this.apiUrl}`, { params }).pipe(
+    tap(response => console.log('Raw API response:', response)),
+    map(stores => {
+      return stores.map(store => {
+        // Log each store to see what ID format they have
+        console.log('Processing store:', store);
+        // Make sure each store has an _id
+        return {
+          ...store,
+          // If the ID is missing, try to extract it
+          _id: store._id || store.id || (typeof store === 'object' && store !== null && '_id' in store ? store._id : '')
+        };
+      });
+    }),
+    tap(stores => console.log('Processed stores:', stores))
+  );
+}
 
   getStore(id: string): Observable<Store> {
     return this.http.get<Store>(`${this.apiUrl}/${id}`);

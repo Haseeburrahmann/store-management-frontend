@@ -37,11 +37,12 @@ import { AuthService } from '../../core/auth/services/auth.service';
             </div>
             
             <nav class="sidebar-nav">
-      <a class="nav-item" routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
-      <a class="nav-item" routerLink="/users" routerLinkActive="active">Users</a>
-      <a class="nav-item" routerLink="/roles" routerLinkActive="active">Roles</a>
-      <a class="nav-item" routerLink="/stores" routerLinkActive="active">Stores</a>
-      <a class="nav-item" routerLink="/profile" routerLinkActive="active">My Profile</a>
+            <a class="nav-item" routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+<a class="nav-item" routerLink="/users" routerLinkActive="active">Users</a>
+<a class="nav-item" routerLink="/roles" routerLinkActive="active">Roles</a>
+<a class="nav-item" routerLink="/stores" routerLinkActive="active">Stores</a>
+<a class="nav-item" routerLink="/employees" routerLinkActive="active">Employees</a>
+<a class="nav-item" routerLink="/profile" routerLinkActive="active">My Profile</a>
       <!-- Other navigation items -->
     </nav>
 

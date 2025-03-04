@@ -1,0 +1,115 @@
+<!-- src/app/features/employee-management/employee-list/employee-list.component.html -->
+<div class="employee-list-container">
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>Employees</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="filter-section">
+          <mat-form-field appearance="outline">
+            <mat-label>Search</mat-label>
+            <input matInput [(ngModel)]="searchQuery" placeholder="Search by name, email, or position">
+            <button mat-icon-button matSuffix (click)="applyFilter()">
+              <mat-icon>search</mat-icon>
+            </button>
+          </mat-form-field>
+  
+          <mat-form-field appearance="outline">
+            <mat-label>Status</mat-label>
+            <mat-select [(ngModel)]="selectedStatus" (selectionChange)="applyFilter()">
+              <mat-option value="">All</mat-option>
+              <mat-option value="active">Active</mat-option>
+              <mat-option value="on_leave">On Leave</mat-option>
+              <mat-option value="terminated">Terminated</mat-option>
+            </mat-select>
+          </mat-form-field>
+  
+          <mat-form-field appearance="outline" *ngIf="!isManager">
+            <mat-label>Store</mat-label>
+            <mat-select [(ngModel)]="selectedStoreId" (selectionChange)="applyFilter()">
+              <mat-option value="">All Stores</mat-option>
+              <mat-option *ngFor="let store of stores" [value]="store._id">{{store.name}}</mat-option>
+            </mat-select>
+          </mat-form-field>
+  
+          <button mat-button color="primary" (click)="clearFilters()">Clear Filters</button>
+          <button mat-raised-button color="primary" [routerLink]="['/employees/new']" *ngIf="isAdmin || isManager">
+            <mat-icon>add</mat-icon> Add Employee
+          </button>
+        </div>
+  
+        <div class="table-container">
+          <table mat-table [dataSource]="employees" class="mat-elevation-z2">
+            <ng-container matColumnDef="full_name">
+              <th mat-header-cell *matHeaderCellDef>Name</th>
+              <td mat-cell *matCellDef="let employee">{{employee.full_name}}</td>
+            </ng-container>
+  
+            <ng-container matColumnDef="email">
+              <th mat-header-cell *matHeaderCellDef>Email</th>
+              <td mat-cell *matCellDef="let employee">{{employee.email}}</td>
+            </ng-container>
+  
+            <ng-container matColumnDef="position">
+              <th mat-header-cell *matHeaderCellDef>Position</th>
+              <td mat-cell *matCellDef="let employee">{{employee.position}}</td>
+            </ng-container>
+  
+            <ng-container matColumnDef="store_name">
+              <th mat-header-cell *matHeaderCellDef>Store</th>
+              <td mat-cell *matCellDef="let employee">{{employee.store_name || 'Not Assigned'}}</td>
+            </ng-container>
+  
+            <ng-container matColumnDef="employment_status">
+              <th mat-header-cell *matHeaderCellDef>Status</th>
+              <td mat-cell *matCellDef="let employee">
+                <span [ngClass]="{
+                  'status-active': employee.employment_status === 'active',
+                  'status-on-leave': employee.employment_status === 'on_leave',
+                  'status-terminated': employee.employment_status === 'terminated'
+                }">
+                  {{employee.employment_status | titlecase}}
+                </span>
+              </td>
+            </ng-container>
+  
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef>Actions</th>
+              <td mat-cell *matCellDef="let employee">
+                <button mat-icon-button [routerLink]="['/employees', employee._id]" matTooltip="View">
+                  <mat-icon>visibility</mat-icon>
+                </button>
+                <button mat-icon-button [routerLink]="['/employees', employee._id, 'edit']" 
+                        matTooltip="Edit" *ngIf="isAdmin || (isManager && employee.store_id === managedStoreId)">
+                  <mat-icon>edit</mat-icon>
+                </button>
+                <button mat-icon-button (click)="deleteEmployee(employee._id)" 
+                        matTooltip="Delete" *ngIf="isAdmin">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </td>
+            </ng-container>
+  
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+          </table>
+  
+          <div *ngIf="isLoading" class="loading-spinner">
+            <mat-spinner diameter="40"></mat-spinner>
+          </div>
+  
+          <div *ngIf="!isLoading && employees.length === 0" class="no-results">
+            No employees found.
+          </div>
+  
+          <mat-paginator 
+            [pageSize]="pageSize"
+            [pageSizeOptions]="[5, 10, 25, 100]"
+            [showFirstLastButtons]="true"
+            [length]="totalCount"
+            (page)="onPageChange($event)">
+          </mat-paginator>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
