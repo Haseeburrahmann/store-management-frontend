@@ -1,0 +1,36 @@
+// src/app/features/store-management/store-form/store-form.component.scss
+.store-form-container {
+    padding: 20px;
+  
+    .full-width {
+      width: 100%;
+    }
+  
+    .form-row {
+      margin-bottom: 16px;
+    }
+  
+    .form-row-multi {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 16px;
+  
+      mat-form-field {
+        flex: 1;
+        min-width: 200px;
+      }
+    }
+  
+    .form-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 24px;
+    }
+  
+    .spinner-button {
+      margin-right: 8px;
+      display: inline-block;
+    }
+  }

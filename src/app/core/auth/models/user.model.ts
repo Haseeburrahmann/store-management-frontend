@@ -10,7 +10,8 @@ export interface User {
   }
   
   export interface UserWithPermissions extends User {
-    permissions: string[];
+    permissions?: string[];
+  role?: string; // Add this field
   }
   
   export interface UserCreate {
