@@ -1,6 +1,8 @@
+// src/app/core/auth/guards/auth.guard.ts
+
 import { Injectable } from '@angular/core';
 import { Router, CanActivate, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
-import { AuthService } from '../services/auth.service';
+import { AuthService } from '../../services/auth.service';
 
 @Injectable({
   providedIn: 'root'
@@ -14,9 +16,25 @@ export class AuthGuard implements CanActivate {
       // Check for required permissions if specified
       const requiredPermission = route.data['permission'] as string;
       
-      if (requiredPermission && !this.authService.hasPermission(requiredPermission)) {
-        this.router.navigate(['/dashboard']);
-        return false;
+      if (requiredPermission) {
+        // If permission is in format "area:action"
+        if (requiredPermission.includes(':') && !requiredPermission.includes('PermissionArea')) {
+          const [area, action] = requiredPermission.split(':');
+          if (!this.authService.hasPermission(area, action)) {
+            console.warn(`Access denied: Missing permission ${requiredPermission}`);
+            this.router.navigate(['/dashboard']);
+            return false;
+          }
+        } 
+        // If permission is in enum format or legacy format
+        else {
+          // Use the legacy method for backward compatibility
+          if (!this.authService.hasPermissionLegacy(requiredPermission)) {
+            console.warn(`Access denied: Missing permission ${requiredPermission}`);
+            this.router.navigate(['/dashboard']);
+            return false;
+          }
+        }
       }
       
       return true;

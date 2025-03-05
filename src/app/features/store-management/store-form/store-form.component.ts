@@ -10,10 +10,13 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
-import { StoreService } from '../../../core/auth/services/store.service';
-import { UserService } from '../../../core/auth/services/user.service';
-import { RoleService } from '../../../core/auth/services/role.service';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+
+import { StoreService } from '../../../core/services/store.service';
+import { UserService } from '../../../core/services/user.service';
+import { RoleService } from '../../../core/services/role.service';
 import { Store, StoreCreate, StoreUpdate } from '../../../shared/models/store.model';
+import { User } from '../../../core/auth/models/user.model';
 
 @Component({
   selector: 'app-store-form',
@@ -28,7 +31,8 @@ import { Store, StoreCreate, StoreUpdate } from '../../../shared/models/store.mo
     MatSelectModule,
     MatProgressSpinnerModule,
     MatCheckboxModule,
-    MatIconModule
+    MatIconModule,
+    MatSnackBarModule
   ],
   templateUrl: './store-form.component.html',
   styleUrls: ['./store-form.component.scss']
@@ -38,8 +42,10 @@ export class StoreFormComponent implements OnInit {
   isEditMode = false;
   storeId: string | null = null;
   isLoading = false;
-  managers: any[] = [];
+  isSaving = false;
+  managers: User[] = [];
   isLoadingManagers = false;
+  error: string = '';
 
   constructor(
     private fb: FormBuilder,
@@ -47,7 +53,8 @@ export class StoreFormComponent implements OnInit {
     private userService: UserService,
     private roleService: RoleService,
     private router: Router,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private snackBar: MatSnackBar
   ) {
     this.storeForm = this.fb.group({
       name: ['', [Validators.required]],
@@ -66,7 +73,7 @@ export class StoreFormComponent implements OnInit {
     this.loadManagers();
     
     this.storeId = this.route.snapshot.paramMap.get('id');
-    this.isEditMode = !!this.storeId;
+    this.isEditMode = !!this.storeId && this.storeId !== 'new';
     
     if (this.isEditMode && this.storeId) {
       this.loadStoreData(this.storeId);
@@ -75,41 +82,50 @@ export class StoreFormComponent implements OnInit {
 
   loadManagers(): void {
     this.isLoadingManagers = true;
+    this.error = '';
     
     // First get the manager role ID
     this.roleService.getRoles().subscribe({
-      next: (roles: any[]) => {
-        const managerRole = roles.find((role: { name: string; }) => role.name === 'Manager');
+      next: (roles) => {
+        const managerRole = roles.find(role => role.name === 'Manager');
         
         if (managerRole) {
           // Then get users with that role
           this.userService.getUsers().subscribe({
-            next: (users: any[]) => {
+            next: (users) => {
               this.managers = users.filter(user => user.role_id === managerRole._id);
-              console.log('Available managers:', this.managers);
               this.isLoadingManagers = false;
             },
-            error: (error: any) => {
-              console.error('Error loading users', error);
+            error: (error) => {
               this.isLoadingManagers = false;
+              this.error = error.message || 'Error loading users';
+              console.error('Error loading users:', error);
+              this.snackBar.open('Error loading users: ' + this.error, 'Close', { duration: 3000 });
             }
           });
         } else {
-          console.error('Manager role not found');
           this.isLoadingManagers = false;
+          this.error = 'Manager role not found';
+          console.error('Manager role not found');
+          this.snackBar.open('Manager role not found', 'Close', { duration: 3000 });
         }
       },
-      error: (error: any) => {
-        console.error('Error loading roles', error);
+      error: (error) => {
         this.isLoadingManagers = false;
+        this.error = error.message || 'Error loading roles';
+        console.error('Error loading roles:', error);
+        this.snackBar.open('Error loading roles: ' + this.error, 'Close', { duration: 3000 });
       }
     });
   }
 
   loadStoreData(id: string): void {
     this.isLoading = true;
+    this.error = '';
+    
     this.storeService.getStore(id).subscribe({
-      next: (store: any) => {
+      next: (store) => {
+        // Patch form with store data
         this.storeForm.patchValue({
           name: store.name,
           address: store.address,
@@ -118,14 +134,16 @@ export class StoreFormComponent implements OnInit {
           zip_code: store.zip_code,
           phone: store.phone,
           email: store.email,
-          manager_id: store.manager_id,
+          manager_id: store.manager_id || '',
           is_active: store.is_active
         });
         this.isLoading = false;
       },
-      error: (error: any) => {
-        console.error('Error loading store data', error);
+      error: (error) => {
         this.isLoading = false;
+        this.error = error.message || 'Error loading store data';
+        console.error('Error loading store data:', error);
+        this.snackBar.open('Error loading store data: ' + this.error, 'Close', { duration: 3000 });
       }
     });
   }
@@ -135,30 +153,49 @@ export class StoreFormComponent implements OnInit {
       return;
     }
 
-    this.isLoading = true;
+    this.isSaving = true;
+    this.error = '';
 
     if (this.isEditMode && this.storeId) {
-      const storeData: StoreUpdate = this.storeForm.value;
+      const storeData: StoreUpdate = { ...this.storeForm.value };
+      
+      // Handle manager_id - convert empty string to undefined for proper API handling
+      if (storeData.manager_id === '') {
+        storeData.manager_id = undefined;
+      }
+      
       this.storeService.updateStore(this.storeId, storeData).subscribe({
         next: () => {
-          this.isLoading = false;
+          this.isSaving = false;
+          this.snackBar.open('Store updated successfully', 'Close', { duration: 3000 });
           this.router.navigate(['/stores']);
         },
-        error: (error: any) => {
-          console.error('Error updating store', error);
-          this.isLoading = false;
+        error: (error) => {
+          this.isSaving = false;
+          this.error = error.message || 'Error updating store';
+          console.error('Error updating store:', error);
+          this.snackBar.open('Error updating store: ' + this.error, 'Close', { duration: 3000 });
         }
       });
     } else {
-      const storeData: StoreCreate = this.storeForm.value;
+      const storeData: StoreCreate = { ...this.storeForm.value };
+      
+      // Handle manager_id - convert empty string to undefined for proper API handling
+      if (storeData.manager_id === '') {
+        storeData.manager_id = undefined;
+      }
+      
       this.storeService.createStore(storeData).subscribe({
         next: () => {
-          this.isLoading = false;
+          this.isSaving = false;
+          this.snackBar.open('Store created successfully', 'Close', { duration: 3000 });
           this.router.navigate(['/stores']);
         },
-        error: (error: any) => {
-          console.error('Error creating store', error);
-          this.isLoading = false;
+        error: (error) => {
+          this.isSaving = false;
+          this.error = error.message || 'Error creating store';
+          console.error('Error creating store:', error);
+          this.snackBar.open('Error creating store: ' + this.error, 'Close', { duration: 3000 });
         }
       });
     }

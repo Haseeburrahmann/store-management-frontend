@@ -16,13 +16,20 @@ import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { Employee } from '../../../core/auth/models/employee.model';
-import { EmployeeService } from '../../../core/auth/services/employee.service';
-import { StoreService } from '../../../core/auth/services/store.service';
-import { AuthService } from '../../../core/auth/services/auth.service';
+import { Employee } from '../../../shared/models/employee.model';
+import { Store } from '../../../shared/models/store.model';
+import { EmployeeService } from '../../../core/services/employee.service';
+import { StoreService } from '../../../core/services/store.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { catchError, map, switchMap } from 'rxjs/operators';
 import { Subscription, of } from 'rxjs';
-import { TimeInterval } from 'rxjs/internal/operators/timeInterval';
+
+// Extended Employee interface for backward compatibility
+interface ExtendedEmployee extends Employee {
+  store_name?: string;
+  display_name?: string;  // Added display name field
+  display_email?: string; // Added display email field
+}
 
 @Component({
   selector: 'app-employee-list',
@@ -49,7 +56,7 @@ import { TimeInterval } from 'rxjs/internal/operators/timeInterval';
   styleUrls: ['./employee-list.component.scss']
 })
 export class EmployeeListComponent implements OnInit, OnDestroy {
-  employees: Employee[] = [];
+  employees: ExtendedEmployee[] = [];
   displayedColumns: string[] = ['full_name', 'email', 'position', 'store_name', 'employment_status', 'actions'];
   isLoading = false;
   totalCount = 0;
@@ -58,11 +65,18 @@ export class EmployeeListComponent implements OnInit, OnDestroy {
   searchQuery = '';
   selectedStatus = '';
   selectedStoreId = '';
-  stores: any[] = [];
+  stores: Store[] = [];
   isAdmin = false;
   isManager = false;
   managedStoreId = '';
-  refreshTimer:any;
+  refreshTimer: any;
+  error: string = '';
+  
+  // Permission flags
+  canCreateEmployee = false;
+  canEditEmployee = false;
+  canDeleteEmployee = false;
+  
   private userSubscription: Subscription | null = null;
   
 
@@ -88,75 +102,117 @@ export class EmployeeListComponent implements OnInit, OnDestroy {
     }
   }
 
-  // For employee-list.component.ts
-checkUserRole(): void {
-  this.userSubscription = this.authService.user$.subscribe(user => {
-    if (user) {
-      // Use hasPermission method to determine roles
-      this.isAdmin = this.authService.hasPermission('PermissionArea.USERS:PermissionAction.APPROVE');
-      this.isManager = this.authService.hasPermission('PermissionArea.EMPLOYEES:PermissionAction.APPROVE') && 
+  checkUserRole(): void {
+    this.userSubscription = this.authService.user$.subscribe(user => {
+      if (user) {
+        // Check permissions using standardized format
+        this.isAdmin = this.authService.hasPermission('users', 'approve');
+        this.isManager = this.authService.hasPermission('employees', 'approve') && 
                        !this.isAdmin; // Manager is someone with employee approve permissions but not admin
-      
-      // For managed_store_id we still need to access it
-      this.managedStoreId = (user as any).managed_store_id || '';
-      
-      // If manager, pre-select their store
-      if (this.isManager && this.managedStoreId) {
-        this.selectedStoreId = this.managedStoreId;
-      }
-    }
-  });
-}
-  
-
-loadEmployeesWithStores(): void {
-  this.isLoading = true;
-  
-  // Load stores first
-  this.storeService.getStores().pipe(
-    switchMap(stores => {
-      // Store the stores data
-      this.stores = stores;
-      
-      // Then load employees
-      return this.employeeService.getEmployees(
-        this.pageIndex * this.pageSize, 
-        this.pageSize, 
-        this.selectedStoreId, 
-        this.searchQuery, 
-        this.selectedStatus
-      );
-    }),
-    map(employees => {
-      // Add store names to employees
-      return employees.map(emp => {
-        if (emp.store_id) {
-          const store = this.stores.find(s => 
-            s._id === emp.store_id || s.id === emp.store_id
-          );
-          
-          if (store) {
-            return {
-              ...emp,
-              store_name: store.name
-            };
-          }
+        
+        // For managed_store_id we still need to access it
+        this.managedStoreId = (user as any).managed_store_id || '';
+        
+        // Set permission flags for action buttons
+        this.canCreateEmployee = this.authService.hasPermission('employees', 'write');
+        this.canEditEmployee = this.authService.hasPermission('employees', 'write');
+        this.canDeleteEmployee = this.authService.hasPermission('employees', 'delete');
+        
+        // If manager, pre-select their store
+        if (this.isManager && this.managedStoreId) {
+          this.selectedStoreId = this.managedStoreId;
         }
-        return {
-          ...emp,
-          store_name: emp.store_name || 'Not Assigned'
-        };
-      });
-    }),
-    catchError(error => {
-      this.snackBar.open('Error loading data', 'Close', { duration: 3000 });
-      return of([]);
-    })
-  ).subscribe(employees => {
-    this.employees = employees;
-    this.isLoading = false;
-  });
-}
+      }
+    });
+  }
+
+  loadEmployeesWithStores(): void {
+    this.isLoading = true;
+    this.error = '';
+    
+    // Load stores first
+    this.storeService.getStores().pipe(
+      catchError(error => {
+        this.error = error.message || 'Error loading stores';
+        console.error('Error loading stores:', error);
+        this.snackBar.open('Error loading stores: ' + this.error, 'Close', { duration: 3000 });
+        return of([]);
+      }),
+      switchMap(stores => {
+        // Store the stores data
+        this.stores = stores;
+        
+        // Then load employees
+        return this.employeeService.getEmployees(
+          this.pageIndex * this.pageSize, 
+          this.pageSize, 
+          this.selectedStoreId, 
+          this.searchQuery, 
+          this.selectedStatus
+        );
+      }),
+      catchError(error => {
+        this.isLoading = false;
+        this.error = error.message || 'Error loading employees';
+        console.error('Error loading employees:', error);
+        this.snackBar.open('Error loading employees: ' + this.error, 'Close', { duration: 3000 });
+        return of([]);
+      }),
+      map(employees => {
+        // Add store names and handle missing user information
+        return employees.map(emp => {
+          const extendedEmp: ExtendedEmployee = { ...emp };
+          
+          // Handle store relationship
+          if (emp.store_id) {
+            // Try to find store by ID
+            const store = this.stores.find(s => s._id === emp.store_id);
+            
+            if (store) {
+              // Add store_name for backward compatibility
+              extendedEmp.store_name = store.name;
+            }
+          } else if (emp.store && emp.store.name) {
+            // If store object exists, use its name
+            extendedEmp.store_name = emp.store.name;
+          } else {
+            extendedEmp.store_name = 'Not Assigned';
+          }
+          
+          // Handle display name for employees without users
+          if (emp.full_name) {
+            extendedEmp.display_name = emp.full_name;
+          } else if (emp.position) {
+            // Use position as a fallback if no name is available
+            extendedEmp.display_name = `${emp.position} (No User Account)`;
+          } else {
+            extendedEmp.display_name = 'Employee (No User Account)';
+          }
+          
+          // Handle display email for employees without users
+          if (emp.email) {
+            extendedEmp.display_email = emp.email;
+          } else {
+            extendedEmp.display_email = 'No Email Available';
+          }
+          
+          return extendedEmp;
+        });
+      })
+    ).subscribe({
+      next: (employees) => {
+        this.employees = employees;
+        this.totalCount = employees.length; // Update for pagination
+        this.isLoading = false;
+      },
+      error: (error) => {
+        this.isLoading = false;
+        this.error = error.message || 'Error loading data';
+        console.error('Error in employee-store pipeline:', error);
+        this.snackBar.open('Error loading data: ' + this.error, 'Close', { duration: 3000 });
+      }
+    });
+  }
 
   onPageChange(event: PageEvent): void {
     this.pageIndex = event.pageIndex;
@@ -179,17 +235,34 @@ loadEmployeesWithStores(): void {
 
   deleteEmployee(id: string): void {
     if (confirm('Are you sure you want to delete this employee?')) {
-      this.employeeService.deleteEmployee(id).subscribe(
-        () => {
+      this.employeeService.deleteEmployee(id).subscribe({
+        next: () => {
           this.snackBar.open('Employee deleted successfully', 'Close', { duration: 3000 });
           this.loadEmployeesWithStores();
         },
-        (error) => {
-          this.snackBar.open('Error deleting employee', 'Close', { duration: 3000 });
+        error: (error) => {
+          this.error = error.message || 'Error deleting employee';
+          console.error('Error deleting employee:', error);
+          this.snackBar.open('Error deleting employee: ' + this.error, 'Close', { duration: 3000 });
         }
-      );
+      });
     }
   }
 
-  
+  // Helper method to check if user can edit a specific employee
+  canEditSpecificEmployee(employee: Employee): boolean {
+    if (this.isAdmin) return true;
+    if (this.isManager && employee.store_id === this.managedStoreId) return true;
+    return false;
+  }
+
+  // Helper method to get display name
+  getDisplayName(employee: ExtendedEmployee): string {
+    return employee.display_name || employee.full_name || 'Employee (No User Account)';
+  }
+
+  // Helper method to get display email
+  getDisplayEmail(employee: ExtendedEmployee): string {
+    return employee.display_email || employee.email || 'No Email Available';
+  }
 }

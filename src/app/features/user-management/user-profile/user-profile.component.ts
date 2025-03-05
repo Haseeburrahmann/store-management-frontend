@@ -1,5 +1,5 @@
 // src/app/features/user-management/user-profile/user-profile.component.ts
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -11,12 +11,14 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { Subscription } from 'rxjs';
 
-import { UserService } from '../../../core/auth/services/user.service';
-import { AuthService } from '../../../core/auth/services/auth.service';
-import { RoleService } from '../../../core/auth/services/role.service';
-import { UserWithPermissions } from '../../../core/auth/models/user.model';
-import { Role } from '../../../core/auth/models/role.model';
+import { UserService } from '../../../core/services/user.service';
+import { AuthService } from '../../../core/services/auth.service';
+import { RoleService } from '../../../core/services/role.service';
+import { UserWithPermissions, UserUpdate } from '../../../core/auth/models/user.model';
+import { Role } from '../../../shared/models/role.model';
+import { formatPermission } from '../../../shared/models/role.model';
 
 @Component({
   selector: 'app-user-profile',
@@ -59,7 +61,18 @@ import { Role } from '../../../core/auth/models/role.model';
                 <div class="info-value">{{ currentUser.phone_number || 'Not provided' }}</div>
                 
                 <div class="info-label">Role:</div>
-                <div class="info-value">{{ getRoleName(currentUser.role_id) }}</div>
+                <div class="info-value">
+                  <!-- Handle different role formats -->
+                  <span *ngIf="currentUser.role && currentUser.role.name">
+                    {{ currentUser.role.name }}
+                  </span>
+                  <span *ngIf="!currentUser.role && currentUser.role_id">
+                    {{ getRoleName(currentUser.role_id) }}
+                  </span>
+                  <span *ngIf="!currentUser.role && !currentUser.role_id">
+                    No Role
+                  </span>
+                </div>
                 
                 <div class="info-label">Account Status:</div>
                 <div class="info-value">
@@ -76,7 +89,7 @@ import { Role } from '../../../core/auth/models/role.model';
               <h3>Your Permissions</h3>
               <div class="permissions-container">
                 <mat-chip-listbox>
-                  <mat-chip *ngFor="let permission of currentUser.permissions">
+                  <mat-chip *ngFor="let permission of displayedPermissions">
                     {{ permission }}
                   </mat-chip>
                 </mat-chip-listbox>
@@ -134,10 +147,18 @@ import { Role } from '../../../core/auth/models/role.model';
                   </mat-form-field>
                 </div>
                 
+                <div class="error-message" *ngIf="error">
+                  {{ error }}
+                </div>
+                
                 <div class="form-actions">
-                  <button mat-raised-button color="primary" type="submit" 
-                          [disabled]="profileForm.invalid || profileForm.pristine">
-                    Update Profile
+                  <button 
+                    mat-raised-button 
+                    color="primary" 
+                    type="submit" 
+                    [disabled]="profileForm.invalid || profileForm.pristine || isSaving"
+                  >
+                    {{ isSaving ? 'Updating...' : 'Update Profile' }}
                   </button>
                 </div>
               </form>
@@ -219,13 +240,25 @@ import { Role } from '../../../core/auth/models/role.model';
       align-items: center;
       min-height: 300px;
     }
+    
+    .error-message {
+      color: #f44336;
+      margin-top: 10px;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
   `]
 })
-export class UserProfileComponent implements OnInit {
+export class UserProfileComponent implements OnInit, OnDestroy {
   profileForm!: FormGroup;
   currentUser: UserWithPermissions | null = null;
   roles: Role[] = [];
   isLoading = false;
+  isSaving = false;
+  error = '';
+  displayedPermissions: string[] = [];
+  
+  private userSubscription?: Subscription;
   
   constructor(
     private fb: FormBuilder,
@@ -240,6 +273,12 @@ export class UserProfileComponent implements OnInit {
     this.createForm();
     this.loadCurrentUser();
     this.loadRoles();
+  }
+  
+  ngOnDestroy(): void {
+    if (this.userSubscription) {
+      this.userSubscription.unsubscribe();
+    }
   }
   
   createForm(): void {
@@ -265,10 +304,16 @@ export class UserProfileComponent implements OnInit {
   
   loadCurrentUser(): void {
     this.isLoading = true;
-    this.authService.user$.subscribe({
+    this.error = '';
+    
+    this.userSubscription = this.authService.user$.subscribe({
       next: (user) => {
         if (user) {
           this.currentUser = user;
+          
+          // Format permissions for display (convert enum format to readable format)
+          this.formatDisplayPermissions(user.permissions || []);
+          
           this.profileForm.patchValue({
             full_name: user.full_name,
             phone_number: user.phone_number
@@ -277,19 +322,21 @@ export class UserProfileComponent implements OnInit {
         this.isLoading = false;
       },
       error: (error) => {
-        console.error('Error loading user profile', error);
-        this.snackBar.open('Error loading profile', 'Close', { duration: 3000 });
         this.isLoading = false;
+        this.error = error.message || 'Error loading user profile';
+        console.error('Error loading user profile', error);
+        this.snackBar.open('Error loading profile: ' + this.error, 'Close', { duration: 3000 });
       }
     });
   }
   
   loadRoles(): void {
     this.roleService.getRoles().subscribe({
-      next: (roles: Role[]) => {
+      next: (roles) => {
         this.roles = roles;
       },
-      error: (error: any) => {
+      error: (error) => {
+        this.error = error.message || 'Error loading roles';
         console.error('Error loading roles', error);
       }
     });
@@ -297,20 +344,53 @@ export class UserProfileComponent implements OnInit {
   
   getRoleName(roleId: string | undefined): string {
     if (!roleId) return 'No Role';
+    
     const role = this.roles.find(r => r._id === roleId);
+    
+    // Try with different id formats if not found
+    if (!role) {
+      const roleByStringId = this.roles.find(r => String(r._id) === String(roleId));
+      if (roleByStringId) {
+        return roleByStringId.name;
+      }
+    }
+    
     return role ? role.name : 'Unknown Role';
+  }
+  
+  formatDisplayPermissions(permissions: string[]): void {
+    // Convert permissions to readable format for display
+    this.displayedPermissions = permissions.map(perm => {
+      // If it's in enum format, convert to simple format
+      if (perm.includes('PermissionArea.')) {
+        const match = perm.match(/PermissionArea\.(\w+):PermissionAction\.(\w+)/);
+        if (match && match.length === 3) {
+          const [_, area, action] = match;
+          return `${area.toLowerCase()}:${action.toLowerCase()}`;
+        }
+      }
+      return perm;
+    });
+    
+    // Remove duplicates that might result from format conversion
+    this.displayedPermissions = [...new Set(this.displayedPermissions)];
   }
   
   onSubmit(): void {
     if (this.profileForm.invalid) return;
     
+    this.isSaving = true;
+    this.error = '';
+    
     const { full_name, phone_number, current_password, password } = this.profileForm.value;
-    const updateData: any = { full_name, phone_number };
+    const updateData: UserUpdate = { full_name, phone_number };
     
     // Only include password if provided
     if (password) {
       if (!current_password) {
-        this.snackBar.open('Current password is required to change password', 'Close', { duration: 3000 });
+        this.error = 'Current password is required to change password';
+        this.snackBar.open(this.error, 'Close', { duration: 3000 });
+        this.isSaving = false;
         return;
       }
       
@@ -318,17 +398,23 @@ export class UserProfileComponent implements OnInit {
       updateData.password = password;
     }
     
-    this.isLoading = true;
     this.userService.updateCurrentUser(updateData).subscribe({
-      next: (updatedUser:any) => {
+      next: () => {
+        this.isSaving = false;
         this.snackBar.open('Profile updated successfully', 'Close', { duration: 3000 });
         this.authService.loadUserProfile(); // Refresh user data
-        this.isLoading = false;
+        
+        // Reset form state
+        this.profileForm.markAsPristine();
+        this.profileForm.get('current_password')?.setValue('');
+        this.profileForm.get('password')?.setValue('');
+        this.profileForm.get('confirm_password')?.setValue('');
       },
-      error: (error: { error: { detail: any; }; }) => {
+      error: (error) => {
+        this.isSaving = false;
+        this.error = error.message || 'Error updating profile';
         console.error('Error updating profile', error);
-        this.snackBar.open(error.error?.detail || 'Error updating profile', 'Close', { duration: 3000 });
-        this.isLoading = false;
+        this.snackBar.open('Error updating profile: ' + this.error, 'Close', { duration: 3000 });
       }
     });
   }

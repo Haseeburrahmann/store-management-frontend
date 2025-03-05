@@ -10,9 +10,19 @@
                 <mat-icon>arrow_back</mat-icon> Back to List
             </button>
             <div class="spacer"></div>
-            <button mat-raised-button color="primary" *ngIf="canEdit" (click)="onEdit()">
+            <button 
+                mat-raised-button 
+                color="primary" 
+                *ngIf="canEdit" 
+                (click)="onEdit()"
+            >
                 <mat-icon>edit</mat-icon> Edit Employee
             </button>
+        </div>
+
+        <!-- Error message display -->
+        <div *ngIf="error" class="error-message">
+            {{ error }}
         </div>
 
         <mat-card>
@@ -40,10 +50,10 @@
                             <div class="info-row">
                                 <div class="info-label">Status:</div>
                                 <div class="info-value" [ngClass]="{
-                    'status-active': employee.employment_status === 'active',
-                    'status-on-leave': employee.employment_status === 'on_leave',
-                    'status-terminated': employee.employment_status === 'terminated'
-                  }">
+                                    'status-active': employee.employment_status === 'active',
+                                    'status-on-leave': employee.employment_status === 'on_leave',
+                                    'status-terminated': employee.employment_status === 'terminated'
+                                }">
                                     {{ employee.employment_status | titlecase }}
                                 </div>
                             </div>
@@ -57,29 +67,49 @@
                             </div>
                             <div class="info-row">
                                 <div class="info-label">Store:</div>
-                                <div class="info-value">{{ employee.store_name || 'Not Assigned' }}</div>
+                                <div class="info-value">
+                                    <!-- Handle different store data formats -->
+                                    <ng-container *ngIf="employee.store && employee.store.name">
+                                        {{ employee.store.name }}
+                                    </ng-container>
+                                    <ng-container *ngIf="(!employee.store || !employee.store.name) && employee.store_name">
+                                        {{ employee.store_name }}
+                                    </ng-container>
+                                    <ng-container *ngIf="(!employee.store || !employee.store.name) && !employee.store_name">
+                                        Not Assigned
+                                    </ng-container>
+                                </div>
                             </div>
 
-                            <div class="info-row" *ngIf="isAdmin || (isManager && (!employee.store_id || employee.store_id === managedStoreId))">
+                            <div class="info-row" 
+                                *ngIf="isAdmin || (isManager && (!employee.store_id || employee.store_id === managedStoreId))"
+                            >
                                 <div class="info-label">Assign to Store:</div>
                                 <div class="info-value store-select">
                                   <mat-form-field appearance="outline">
                                     <mat-label>Select Store</mat-label>
-                                    <mat-select [(ngModel)]="selectedStoreId" (selectionChange)="storeSelectionChanged($event)">
-                                        <mat-option *ngFor="let store of stores" [value]="store._id || ''">
+                                    <mat-select 
+                                        [(ngModel)]="selectedStoreId" 
+                                        (selectionChange)="storeSelectionChanged($event)"
+                                        [disabled]="isAssigningStore"
+                                    >
+                                        <mat-option *ngFor="let store of stores" [value]="store._id">
                                           {{ store.name }}
                                         </mat-option>
                                       </mat-select>
                                   </mat-form-field>
-                                  <button mat-raised-button color="primary" [disabled]="!selectedStoreId" (click)="assignToStore()">
-                                    Assign
+                                  <button 
+                                    mat-raised-button 
+                                    color="primary" 
+                                    [disabled]="!selectedStoreId || isAssigningStore" 
+                                    (click)="assignToStore()"
+                                  >
+                                    <mat-spinner *ngIf="isAssigningStore" diameter="20" class="button-spinner"></mat-spinner>
+                                    <span *ngIf="!isAssigningStore">Assign</span>
+                                    <span *ngIf="isAssigningStore">Assigning...</span>
                                   </button>
                                 </div>
-                                <!-- Debug info -->
-                                <div style="margin-top: 8px; font-size: 12px; color: #666;">
-                                  Selected Store ID: {{ selectedStoreId }}
-                                </div>
-                              </div>
+                            </div>
                         </div>
                     </mat-tab>
 

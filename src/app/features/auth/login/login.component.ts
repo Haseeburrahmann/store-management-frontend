@@ -1,14 +1,15 @@
 import { Component } from '@angular/core';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 
-import { AuthService } from '../../../core/auth/services/auth.service';
+import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
   selector: 'app-login',
@@ -20,6 +21,7 @@ import { AuthService } from '../../../core/auth/services/auth.service';
     MatInputModule,
     MatButtonModule,
     MatCardModule,
+    MatProgressBarModule,
     RouterModule
   ],
   template: `
@@ -55,9 +57,19 @@ import { AuthService } from '../../../core/auth/services/auth.service';
             }
             
             <div class="actions">
-              <button mat-raised-button color="primary" type="submit" [disabled]="loginForm.invalid">Login</button>
+              <button mat-raised-button color="primary" type="submit" [disabled]="loginForm.invalid || isLoading">
+                @if (isLoading) {
+                  Logging in...
+                } @else {
+                  Login
+                }
+              </button>
               <a mat-button routerLink="/register">Register</a>
             </div>
+            
+            @if (isLoading) {
+              <mat-progress-bar mode="indeterminate" class="mt-3"></mat-progress-bar>
+            }
           </form>
         </mat-card-content>
       </mat-card>
@@ -105,34 +117,54 @@ import { AuthService } from '../../../core/auth/services/auth.service';
     mat-card-header {
       margin-bottom: 20px;
     }
+    
+    .mt-3 {
+      margin-top: 15px;
+    }
   `]
 })
 export class LoginComponent {
   loginForm: FormGroup;
   error: string = '';
+  isLoading: boolean = false;
+  returnUrl: string = '/dashboard';
   
   constructor(
     private fb: FormBuilder,
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private route: ActivatedRoute
   ) {
     this.loginForm = this.fb.group({
       email: ['', [Validators.required, Validators.email]],
       password: ['', Validators.required]
     });
+    
+    // Get return URL from route parameters or default to '/dashboard'
+    this.returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/dashboard';
   }
   
   onSubmit(): void {
     if (this.loginForm.valid) {
       const { email, password } = this.loginForm.value;
       
+      this.isLoading = true;
+      this.error = '';
+      
       this.authService.login(email, password).subscribe({
         next: () => {
-          this.router.navigate(['/dashboard']);
+          this.isLoading = false;
+          this.router.navigateByUrl(this.returnUrl);
         },
         error: (err) => {
-          this.error = 'Invalid email or password';
-          console.error(err);
+          this.isLoading = false;
+          // Use the standardized error handling format
+          if (err instanceof Error) {
+            this.error = err.message;
+          } else {
+            this.error = 'Invalid email or password';
+          }
+          console.error('Login error:', err);
         }
       });
     }

@@ -12,9 +12,11 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
-import { UserService } from '../../../core/auth/services/user.service';
-import { RoleService } from '../../../core/auth/services/role.service';
-import { Role } from '../../../core/auth/models/role.model';
+import { UserService } from '../../../core/services/user.service';
+import { RoleService } from '../../../core/services/role.service';
+import { AuthService } from '../../../core/services/auth.service';
+import { User, UserCreate, UserUpdate } from '../../../core/auth/models/user.model';
+import { Role } from '../../../shared/models/role.model';
 
 @Component({
   selector: 'app-user-detail',
@@ -104,10 +106,14 @@ import { Role } from '../../../core/auth/models/role.model';
               <mat-checkbox formControlName="is_active">Active</mat-checkbox>
             </div>
             
+            <div class="error-message" *ngIf="error">
+              {{ error }}
+            </div>
+            
             <div class="form-actions">
               <button mat-button [routerLink]="['/users']">Cancel</button>
-              <button mat-raised-button color="primary" type="submit" [disabled]="userForm.invalid">
-                {{ isNewUser ? 'Create' : 'Update' }}
+              <button mat-raised-button color="primary" type="submit" [disabled]="userForm.invalid || isSaving">
+                {{ isSaving ? 'Saving...' : (isNewUser ? 'Create' : 'Update') }}
               </button>
             </div>
           </form>
@@ -143,6 +149,13 @@ import { Role } from '../../../core/auth/models/role.model';
       align-items: center;
       min-height: 300px;
     }
+    
+    .error-message {
+      color: #f44336;
+      margin-top: 10px;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
   `]
 })
 export class UserDetailComponent implements OnInit {
@@ -150,6 +163,8 @@ export class UserDetailComponent implements OnInit {
   userId: string | null = null;
   isNewUser = true;
   isLoading = false;
+  isSaving = false;
+  error = '';
   roles: Role[] = [];
   
   constructor(
@@ -158,6 +173,7 @@ export class UserDetailComponent implements OnInit {
     private router: Router,
     private userService: UserService,
     private roleService: RoleService,
+    private authService: AuthService,
     private snackBar: MatSnackBar
   ) { }
   
@@ -186,6 +202,8 @@ export class UserDetailComponent implements OnInit {
   
   loadUser(userId: string): void {
     this.isLoading = true;
+    this.error = '';
+    
     this.userService.getUser(userId).subscribe({
       next: (user) => {
         this.userForm.patchValue({
@@ -203,10 +221,10 @@ export class UserDetailComponent implements OnInit {
         this.isLoading = false;
       },
       error: (error) => {
-        console.error('Error loading user', error);
-        this.snackBar.open('Error loading user', 'Close', { duration: 3000 });
         this.isLoading = false;
-        this.router.navigate(['/users']);
+        this.error = error.message || 'Error loading user';
+        console.error('Error loading user', error);
+        this.snackBar.open('Error loading user: ' + this.error, 'Close', { duration: 3000 });
       }
     });
   }
@@ -217,8 +235,9 @@ export class UserDetailComponent implements OnInit {
         this.roles = roles;
       },
       error: (error) => {
+        this.error = error.message || 'Error loading roles';
         console.error('Error loading roles', error);
-        this.snackBar.open('Error loading roles', 'Close', { duration: 3000 });
+        this.snackBar.open('Error loading roles: ' + this.error, 'Close', { duration: 3000 });
       }
     });
   }
@@ -226,37 +245,51 @@ export class UserDetailComponent implements OnInit {
   onSubmit(): void {
     if (this.userForm.invalid) return;
     
-    const userData = this.userForm.value;
+    this.isSaving = true;
+    this.error = '';
+    
+    const formData = { ...this.userForm.value };
     
     // Remove empty password for existing users
-    if (!this.isNewUser && !userData.password) {
-      delete userData.password;
+    if (!this.isNewUser && !formData.password) {
+      delete formData.password;
     }
     
-    this.isLoading = true;
+    // Ensure role_id is a string or null
+    if (formData.role_id) {
+      formData.role_id = formData.role_id.toString();
+    }
     
     if (this.isNewUser) {
+      const userData: UserCreate = formData;
+      
       this.userService.createUser(userData).subscribe({
         next: () => {
+          this.isSaving = false;
           this.snackBar.open('User created successfully', 'Close', { duration: 3000 });
           this.router.navigate(['/users']);
         },
-        error: (error: { error: { detail: any; }; }) => {
+        error: (error) => {
+          this.isSaving = false;
+          this.error = error.message || 'Error creating user';
           console.error('Error creating user', error);
-          this.snackBar.open(error.error?.detail || 'Error creating user', 'Close', { duration: 3000 });
-          this.isLoading = false;
+          this.snackBar.open('Error creating user: ' + this.error, 'Close', { duration: 3000 });
         }
       });
     } else {
+      const userData: UserUpdate = formData;
+      
       this.userService.updateUser(this.userId!, userData).subscribe({
         next: () => {
+          this.isSaving = false;
           this.snackBar.open('User updated successfully', 'Close', { duration: 3000 });
           this.router.navigate(['/users']);
         },
         error: (error) => {
+          this.isSaving = false;
+          this.error = error.message || 'Error updating user';
           console.error('Error updating user', error);
-          this.snackBar.open(error.error?.detail || 'Error updating user', 'Close', { duration: 3000 });
-          this.isLoading = false;
+          this.snackBar.open('Error updating user: ' + this.error, 'Close', { duration: 3000 });
         }
       });
     }

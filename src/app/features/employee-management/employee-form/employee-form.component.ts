@@ -1,5 +1,5 @@
 // src/app/features/employee-management/employee-form/employee-form.component.ts
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
@@ -15,13 +15,15 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
-import { Employee, EmployeeCreate, EmployeeUpdate } from '../../../core/auth/models/employee.model';
-import { EmployeeService } from '../../../core/auth/services/employee.service';
-import { StoreService } from '../../../core/auth/services/store.service';
-import { RoleService } from '../../../core/auth/services/role.service';
-import { AuthService } from '../../../core/auth/services/auth.service';
+import { Employee, EmployeeCreate, EmployeeUpdate } from '../../../shared/models/employee.model';
+import { Store } from '../../../shared/models/store.model';
+import { Role } from '../../../shared/models/role.model';
+import { EmployeeService } from '../../../core/services/employee.service';
+import { StoreService } from '../../../core/services/store.service';
+import { RoleService } from '../../../core/services/role.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { catchError } from 'rxjs/operators';
-import { of } from 'rxjs';
+import { of, Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-employee-form',
@@ -46,17 +48,20 @@ import { of } from 'rxjs';
   templateUrl: './employee-form.component.html',
   styleUrls: ['./employee-form.component.scss']
 })
-export class EmployeeFormComponent implements OnInit {
+export class EmployeeFormComponent implements OnInit, OnDestroy {
   employeeForm!: FormGroup;
   employeeId: string = '';
   isEditMode = false;
   isLoading = false;
-  stores: any[] = [];
-  roles: any[] = [];
+  stores: Store[] = [];
+  roles: Role[] = [];
   isAdmin = false;
   isManager = false;
   managedStoreId = '';
   submitInProgress = false;
+  error: string = '';
+  
+  private userSubscription: Subscription | null = null;
 
   constructor(
     private fb: FormBuilder,
@@ -82,10 +87,17 @@ export class EmployeeFormComponent implements OnInit {
       this.loadEmployeeData();
     }
   }
+  
+  ngOnDestroy(): void {
+    if (this.userSubscription) {
+      this.userSubscription.unsubscribe();
+    }
+  }
 
   initializeForm(): void {
     this.employeeForm = this.fb.group({
       email: ['', [Validators.required, Validators.email]],
+      user_id: ['', Validators.required], 
       full_name: ['', Validators.required],
       phone_number: [''],
       is_active: [true],
@@ -106,33 +118,37 @@ export class EmployeeFormComponent implements OnInit {
   }
 
   loadStores(): void {
-    this.storeService.getStores().subscribe(
-      (stores) => {
+    this.storeService.getStores().subscribe({
+      next: (stores) => {
         this.stores = stores;
       },
-      (error) => {
-        this.snackBar.open('Error loading stores', 'Close', { duration: 3000 });
+      error: (error) => {
+        this.error = error.message || 'Error loading stores';
+        console.error('Error loading stores:', error);
+        this.snackBar.open('Error loading stores: ' + this.error, 'Close', { duration: 3000 });
       }
-    );
+    });
   }
 
   loadRoles(): void {
-    this.roleService.getRoles().subscribe(
-      (roles) => {
+    this.roleService.getRoles().subscribe({
+      next: (roles) => {
         this.roles = roles;
       },
-      (error) => {
-        this.snackBar.open('Error loading roles', 'Close', { duration: 3000 });
+      error: (error) => {
+        this.error = error.message || 'Error loading roles';
+        console.error('Error loading roles:', error);
+        this.snackBar.open('Error loading roles: ' + this.error, 'Close', { duration: 3000 });
       }
-    );
+    });
   }
 
   checkUserRole(): void {
-    this.authService.user$.subscribe(user => {
+    this.userSubscription = this.authService.user$.subscribe(user => {
       if (user) {
-        // Use hasPermission method to determine roles
-        this.isAdmin = this.authService.hasPermission('PermissionArea.USERS:PermissionAction.APPROVE');
-        this.isManager = this.authService.hasPermission('PermissionArea.EMPLOYEES:PermissionAction.APPROVE') && 
+        // Check permissions using standardized format
+        this.isAdmin = this.authService.hasPermission('users', 'approve');
+        this.isManager = this.authService.hasPermission('employees', 'approve') && 
                         !this.isAdmin;
         
         // For managed_store_id we still need to access it
@@ -149,18 +165,28 @@ export class EmployeeFormComponent implements OnInit {
 
   loadEmployeeData(): void {
     this.isLoading = true;
+    this.error = '';
+    
     this.employeeService.getEmployeeById(this.employeeId)
       .pipe(
         catchError(error => {
-          this.snackBar.open('Error loading employee data', 'Close', { duration: 3000 });
+          this.isLoading = false;
+          this.error = error.message || 'Error loading employee data';
+          console.error('Error loading employee data:', error);
+          this.snackBar.open('Error loading employee data: ' + this.error, 'Close', { duration: 3000 });
           this.router.navigate(['/employees']);
           return of(null);
         })
       )
       .subscribe(employee => {
+        this.isLoading = false;
+        
         if (employee) {
           // Remove password field in edit mode
           this.employeeForm.removeControl('password');
+          
+          // Format the hire date properly
+          const hireDate = employee.hire_date ? new Date(employee.hire_date) : new Date();
           
           // Map employee data to form
           this.employeeForm.patchValue({
@@ -178,8 +204,8 @@ export class EmployeeFormComponent implements OnInit {
             state: employee.state || '',
             zip_code: employee.zip_code || '',
             store_id: employee.store_id || '',
-            hire_date: employee.hire_date ? new Date(employee.hire_date) : new Date(),
-            role_id: employee._id || ''
+            hire_date: hireDate,
+            role_id: employee.role_id || ''
           });
           
           // If manager, enforce store selection to their managed store
@@ -188,22 +214,25 @@ export class EmployeeFormComponent implements OnInit {
             this.employeeForm.get('store_id')?.disable();
           }
         }
-        this.isLoading = false;
       });
   }
 
   onSubmit(): void {
+    debugger;
     if (this.employeeForm.invalid) {
       this.markFormGroupTouched(this.employeeForm);
       return;
     }
     
     this.submitInProgress = true;
-    const formData = { ...this.employeeForm.value };
+    this.error = '';
     
-    // If the form is disabled, get the value from the raw value
-    if (this.employeeForm.get('store_id')?.disabled && this.managedStoreId) {
-      formData.store_id = this.managedStoreId;
+    // Get form values and handle disabled controls
+    const formData = { ...this.employeeForm.getRawValue() };
+    
+    // Format the hire date properly for API
+    if (formData.hire_date instanceof Date) {
+      formData.hire_date = formData.hire_date.toISOString();
     }
     
     if (this.isEditMode) {
@@ -213,37 +242,45 @@ export class EmployeeFormComponent implements OnInit {
           delete formData[key];
         }
       });
-      
+      console.log('Sending employee data to API:', formData);
+
       this.employeeService.updateEmployee(this.employeeId, formData as EmployeeUpdate)
         .pipe(
           catchError(error => {
             this.submitInProgress = false;
-            this.snackBar.open('Error updating employee', 'Close', { duration: 3000 });
+            this.error = error.message || 'Error updating employee';
+            console.error('Error updating employee:', error);
+            this.snackBar.open('Error updating employee: ' + this.error, 'Close', { duration: 3000 });
             return of(null);
           })
         )
         .subscribe(employee => {
+          this.submitInProgress = false;
+          
           if (employee) {
             this.snackBar.open('Employee updated successfully', 'Close', { duration: 3000 });
             this.router.navigate(['/employees', this.employeeId]);
           }
-          this.submitInProgress = false;
         });
     } else {
       this.employeeService.createEmployee(formData as EmployeeCreate)
-        .pipe(
-          catchError(error => {
-            this.submitInProgress = false;
-            this.snackBar.open('Error creating employee', 'Close', { duration: 3000 });
-            return of(null);
-          })
-        )
-        .subscribe(employee => {
+      .pipe(
+        catchError(error => {
+          this.submitInProgress = false;
+          // Log the full error object
+          console.error('Full error object:', error);
+          this.error = error.message || 'Error creating employee';
+          console.error('Error creating employee:', error);
+          this.snackBar.open('Error creating employee: ' + this.error, 'Close', { duration: 3000 });
+          return of(null);
+        })
+      ).subscribe(employee => {
+          this.submitInProgress = false;
+          
           if (employee) {
             this.snackBar.open('Employee created successfully', 'Close', { duration: 3000 });
             this.router.navigate(['/employees']);
           }
-          this.submitInProgress = false;
         });
     }
   }

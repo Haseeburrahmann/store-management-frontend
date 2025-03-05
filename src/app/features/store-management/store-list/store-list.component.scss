@@ -1,56 +1,77 @@
 // src/app/features/store-management/store-list/store-list.component.scss
+
 .store-list-container {
-    padding: 20px;
+  padding: 20px;
+}
+
+.actions-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
+
+.filter-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 20px;
   
-    .actions-row {
-      margin-bottom: 20px;
-      display: flex;
-      justify-content: flex-end;
-    }
-  
-    .filter-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 16px;
-      margin-bottom: 20px;
-      align-items: center;
-  
-      mat-form-field {
-        flex: 1;
-        min-width: 200px;
-      }
-  
-      .filter-actions {
-        display: flex;
-        gap: 8px;
-      }
-    }
-  
-    .table-container {
-      position: relative;
-      min-height: 200px;
-      overflow: auto;
-  
-      table {
-        width: 100%;
-      }
-  
-      .spinner-container {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(255, 255, 255, 0.7);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-  
-      .no-data {
-        padding: 20px;
-        text-align: center;
-        color: rgba(0, 0, 0, 0.54);
-      }
-    }
+  mat-form-field {
+    flex: 1;
+    min-width: 200px;
   }
+  
+  .filter-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+  }
+}
+
+.table-container {
+  position: relative;
+  min-height: 200px;
+  
+  table {
+    width: 100%;
+  }
+  
+  .mat-column-status {
+    width: 120px;
+  }
+  
+  .mat-column-actions {
+    width: 120px;
+    text-align: right;
+  }
+}
+
+.spinner-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.8);
+  z-index: 1;
+}
+
+.no-data {
+  padding: 30px;
+  text-align: center;
+  color: rgba(0, 0, 0, 0.54);
+  font-size: 16px;
+}
+
+.error-message {
+  color: #f44336;
+  margin: 16px 0;
+  padding: 12px;
+  background-color: rgba(244, 67, 54, 0.1);
+  border-radius: 4px;
+  border-left: 4px solid #f44336;
+}

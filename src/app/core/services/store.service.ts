@@ -2,8 +2,8 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { map, Observable, tap } from 'rxjs';
-import { environment } from '../../../../environments/environment';
-import { Store, StoreCreate, StoreUpdate } from '../../../shared/models/store.model';
+import { environment } from '../../../environments/environment';
+import { Store, StoreCreate, StoreUpdate } from '../../shared/models/store.model';
 
 @Injectable({
   providedIn: 'root'
@@ -17,7 +17,7 @@ export class StoreService {
  // In store.service.ts
 // src/app/core/services/store.service.ts
 // src/app/core/services/store.service.ts
-getStores(search?: number, status?: number, skip?: string, limit?: string): Observable<any[]> {
+getStores(search?: number, status?: number, skip?: string, limit?: string): Observable<any[]>{
   let params = new HttpParams();
   
   // Add params as needed...
