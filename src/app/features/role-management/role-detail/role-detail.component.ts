@@ -13,7 +13,8 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatExpansionModule } from '@angular/material/expansion';
 
-import { RoleService } from '../../../core/auth/services/role.service';
+import { RoleService } from '../../../core/services/role.service';
+import { Role, RoleCreate, RoleUpdate, formatPermission } from '../../../shared/models/role.model';
 
 @Component({
   selector: 'app-role-detail',
@@ -78,9 +79,11 @@ import { RoleService } from '../../../core/auth/services/role.service';
                   
                   <div class="permissions-container">
                     <div *ngFor="let action of permissionActions" class="permission-checkbox">
-                      <mat-checkbox [checked]="hasPermission(area, action)" 
-                                  (change)="togglePermission(area, action)"
-                                  [disabled]="isDefaultRole">
+                      <mat-checkbox 
+                        [checked]="hasPermission(area, action)" 
+                        (change)="togglePermission(area, action)"
+                        [disabled]="isDefaultRole"
+                      >
                         {{ action | titlecase }}
                       </mat-checkbox>
                     </div>
@@ -89,11 +92,19 @@ import { RoleService } from '../../../core/auth/services/role.service';
               </mat-accordion>
             </div>
             
+            <div class="error-message" *ngIf="error">
+              {{ error }}
+            </div>
+            
             <div class="form-actions">
               <button mat-button [routerLink]="['/roles']">Cancel</button>
-              <button mat-raised-button color="primary" type="submit" 
-                      [disabled]="roleForm.invalid || isDefaultRole">
-                {{ isNewRole ? 'Create' : 'Update' }}
+              <button 
+                mat-raised-button 
+                color="primary" 
+                type="submit" 
+                [disabled]="roleForm.invalid || isDefaultRole || isSaving"
+              >
+                {{ isSaving ? 'Saving...' : (isNewRole ? 'Create' : 'Update') }}
               </button>
             </div>
           </form>
@@ -140,6 +151,13 @@ import { RoleService } from '../../../core/auth/services/role.service';
     .permission-checkbox {
       min-width: 120px;
     }
+    
+    .error-message {
+      color: #f44336;
+      margin-top: 10px;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
   `]
 })
 export class RoleDetailComponent implements OnInit {
@@ -147,7 +165,9 @@ export class RoleDetailComponent implements OnInit {
   roleId: string | null = null;
   isNewRole = true;
   isLoading = false;
+  isSaving = false;
   isDefaultRole = false;
+  error = '';
   
   permissionAreas = [
     'users', 'roles', 'stores', 'employees', 
@@ -187,24 +207,42 @@ export class RoleDetailComponent implements OnInit {
   
   loadRole(roleId: string): void {
     this.isLoading = true;
+    this.error = '';
+    
     this.roleService.getRole(roleId).subscribe({
-      next: (role: any) => {
+      next: (role) => {
         this.roleForm.patchValue({
           name: role.name,
           description: role.description,
           permissions: role.permissions
         });
         
-        this.selectedPermissions = role.permissions;
+        // Normalize permissions to handle both formats
+        this.selectedPermissions = this.normalizePermissions(role.permissions);
+        
         this.isDefaultRole = ['Admin', 'Manager', 'Employee'].includes(role.name);
         this.isLoading = false;
       },
-      error: (error: any) => {
-        console.error('Error loading role', error);
-        this.snackBar.open('Error loading role', 'Close', { duration: 3000 });
+      error: (error) => {
         this.isLoading = false;
-        this.router.navigate(['/roles']);
+        this.error = error.message || 'Error loading role';
+        console.error('Error loading role', error);
+        this.snackBar.open('Error loading role: ' + this.error, 'Close', { duration: 3000 });
       }
+    });
+  }
+  
+  normalizePermissions(permissions: string[]): string[] {
+    // Convert permissions to standard format
+    return permissions.map(permission => {
+      if (permission.includes('PermissionArea.')) {
+        const match = permission.match(/PermissionArea\.(\w+):PermissionAction\.(\w+)/);
+        if (match && match.length === 3) {
+          const [_, area, action] = match;
+          return `${area.toLowerCase()}:${action.toLowerCase()}`;
+        }
+      }
+      return permission;
     });
   }
   
@@ -224,42 +262,75 @@ export class RoleDetailComponent implements OnInit {
     this.roleForm.patchValue({
       permissions: this.selectedPermissions
     });
+    
+    // Mark the form as dirty to enable the save button
+    this.roleForm.markAsDirty();
   }
   
   getSelectedAreaPermissions(area: string): string[] {
     return this.selectedPermissions.filter(p => p.startsWith(`${area}:`));
   }
   
+  formatPermissionsForBackend(permissions: string[]): string[] {
+    // Convert to backend's format (PermissionArea.X:PermissionAction.Y)
+    return permissions.map(permission => {
+      if (!permission.includes('PermissionArea.')) {
+        const [area, action] = permission.split(':');
+        return `PermissionArea.${area.toUpperCase()}:PermissionAction.${action.toUpperCase()}`;
+      }
+      return permission;
+    });
+  }
+  
   onSubmit(): void {
     if (this.roleForm.invalid) return;
     
-    const roleData = this.roleForm.value;
-    roleData.permissions = this.selectedPermissions;
+    this.isSaving = true;
+    this.error = '';
     
-    this.isLoading = true;
+    const formData = this.roleForm.value;
+    
+    // Format permissions for the backend
+    const permissions = this.formatPermissionsForBackend(this.selectedPermissions);
     
     if (this.isNewRole) {
+      const roleData: RoleCreate = {
+        name: formData.name,
+        description: formData.description,
+        permissions: permissions
+      };
+      
       this.roleService.createRole(roleData).subscribe({
         next: () => {
+          this.isSaving = false;
           this.snackBar.open('Role created successfully', 'Close', { duration: 3000 });
           this.router.navigate(['/roles']);
         },
-        error: (error: { error: { detail: any; }; }) => {
+        error: (error) => {
+          this.isSaving = false;
+          this.error = error.message || 'Error creating role';
           console.error('Error creating role', error);
-          this.snackBar.open(error.error?.detail || 'Error creating role', 'Close', { duration: 3000 });
-          this.isLoading = false;
+          this.snackBar.open('Error creating role: ' + this.error, 'Close', { duration: 3000 });
         }
       });
     } else {
+      const roleData: RoleUpdate = {
+        name: formData.name,
+        description: formData.description,
+        permissions: permissions
+      };
+      
       this.roleService.updateRole(this.roleId!, roleData).subscribe({
         next: () => {
+          this.isSaving = false;
           this.snackBar.open('Role updated successfully', 'Close', { duration: 3000 });
           this.router.navigate(['/roles']);
         },
-        error: (error: { error: { detail: any; }; }) => {
+        error: (error) => {
+          this.isSaving = false;
+          this.error = error.message || 'Error updating role';
           console.error('Error updating role', error);
-          this.snackBar.open(error.error?.detail || 'Error updating role', 'Close', { duration: 3000 });
-          this.isLoading = false;
+          this.snackBar.open('Error updating role: ' + this.error, 'Close', { duration: 3000 });
         }
       });
     }

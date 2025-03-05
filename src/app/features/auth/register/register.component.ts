@@ -5,10 +5,12 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 
-import { AuthService } from '../../../core/auth/services/auth.service';
+import { AuthService } from '../../../core/services/auth.service';
+import { UserCreate } from '../../../core/auth/models/user.model';
 
 @Component({
   selector: 'app-register',
@@ -20,6 +22,7 @@ import { AuthService } from '../../../core/auth/services/auth.service';
     MatInputModule,
     MatButtonModule,
     MatCardModule,
+    MatProgressBarModule,
     RouterModule
   ],
   template: `
@@ -42,6 +45,14 @@ import { AuthService } from '../../../core/auth/services/auth.service';
               <mat-form-field appearance="outline" class="full-width">
                 <mat-label>Full Name</mat-label>
                 <input matInput formControlName="full_name">
+                @if (registerForm.get('full_name')?.invalid && registerForm.get('full_name')?.touched) {
+                  <mat-error>Full name is required</mat-error>
+                }
+              </mat-form-field>
+              
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Phone Number</mat-label>
+                <input matInput formControlName="phone_number">
               </mat-form-field>
               
               <mat-form-field appearance="outline" class="full-width">
@@ -63,10 +74,6 @@ import { AuthService } from '../../../core/auth/services/auth.service';
                   </mat-error>
                 }
               </mat-form-field>
-              <mat-form-field appearance="outline" class="full-width">
-  <mat-label>Phone Number</mat-label>
-  <input matInput formControlName="phone_number">
-</mat-form-field>
             </div>
             
             @if (error) {
@@ -76,9 +83,19 @@ import { AuthService } from '../../../core/auth/services/auth.service';
             }
             
             <div class="actions">
-              <button mat-raised-button color="primary" type="submit" [disabled]="registerForm.invalid">Register</button>
+              <button mat-raised-button color="primary" type="submit" [disabled]="registerForm.invalid || isLoading">
+                @if (isLoading) {
+                  Registering...
+                } @else {
+                  Register
+                }
+              </button>
               <a mat-button routerLink="/login">Already have an account?</a>
             </div>
+            
+            @if (isLoading) {
+              <mat-progress-bar mode="indeterminate" class="mt-3"></mat-progress-bar>
+            }
           </form>
         </mat-card-content>
       </mat-card>
@@ -126,11 +143,16 @@ import { AuthService } from '../../../core/auth/services/auth.service';
     mat-card-header {
       margin-bottom: 20px;
     }
+    
+    .mt-3 {
+      margin-top: 15px;
+    }
   `]
 })
 export class RegisterComponent {
   registerForm: FormGroup;
   error: string = '';
+  isLoading: boolean = false;
 
   constructor(
     private fb: FormBuilder,
@@ -140,7 +162,7 @@ export class RegisterComponent {
     this.registerForm = this.fb.group({
       email: ['', [Validators.required, Validators.email]],
       full_name: ['', Validators.required],
-      phone_number: [''], // Add phone number field
+      phone_number: [''],
       password: ['', [Validators.required, Validators.minLength(6)]],
       confirmPassword: ['', Validators.required]
     }, { validator: this.checkPasswords });
@@ -155,15 +177,37 @@ export class RegisterComponent {
 
   onSubmit(): void {
     if (this.registerForm.valid) {
-      const { email, full_name, password } = this.registerForm.value;
+      this.isLoading = true;
+      this.error = '';
+      
+      const { email, full_name, phone_number, password } = this.registerForm.value;
+      
+      // Create UserCreate object with our model format
+      const userData: UserCreate = {
+        email,
+        full_name,
+        phone_number,
+        password
+      };
 
-      this.authService.register({ email, full_name, password }).subscribe({
+      this.authService.register(userData).subscribe({
         next: () => {
+          this.isLoading = false;
           this.router.navigate(['/login']);
         },
         error: (err) => {
-          this.error = err.error.detail || 'Registration failed';
-          console.error(err);
+          this.isLoading = false;
+          
+          // Use the standardized error handling
+          if (err instanceof Error) {
+            this.error = err.message;
+          } else if (err.error && err.error.detail) {
+            this.error = err.error.detail;
+          } else {
+            this.error = 'Registration failed. Please try again.';
+          }
+          
+          console.error('Registration error:', err);
         }
       });
     }

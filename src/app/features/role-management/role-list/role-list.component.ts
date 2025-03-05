@@ -1,5 +1,5 @@
 // src/app/features/role-management/role-list/role-list.component.ts
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
@@ -11,10 +11,11 @@ import { MatChipsModule } from '@angular/material/chips';
 import { RouterModule } from '@angular/router';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
+import { Subscription } from 'rxjs';
 
-import { RoleService } from '../../../core/auth/services/role.service';
-import { Role } from '../../../core/auth/models/role.model';
-import { AuthService } from '../../../core/auth/services/auth.service';
+import { RoleService } from '../../../core/services/role.service';
+import { Role } from '../../../shared/models/role.model';
+import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
   selector: 'app-role-list',
@@ -37,8 +38,12 @@ import { AuthService } from '../../../core/auth/services/auth.service';
         <mat-card-header>
           <mat-card-title>Role Management</mat-card-title>
           <div class="header-actions">
-            <button mat-raised-button color="primary" [routerLink]="['/roles/new']" 
-                    *ngIf="authService.hasPermission('roles:write')">
+            <button 
+              mat-raised-button 
+              color="primary" 
+              [routerLink]="['/roles/new']" 
+              *ngIf="canCreateRoles"
+            >
               <mat-icon>add</mat-icon> Add Role
             </button>
           </div>
@@ -69,10 +74,11 @@ import { AuthService } from '../../../core/auth/services/auth.service';
                 <td mat-cell *matCellDef="let role" class="permissions-cell">
                   <div class="permissions-container">
                     <mat-chip-set>
-                      <mat-chip *ngFor="let permission of getDisplayPermissions(role.permissions)" 
-                              [matTooltip]="role.permissions.length > 3 ? 
-                                        role.permissions.join(', ') : ''">
-                        {{permission}}
+                      <mat-chip 
+                        *ngFor="let permission of getDisplayPermissions(role.permissions)" 
+                        [matTooltip]="role.permissions.length > 3 ? getFormattedPermissions(role.permissions) : ''"
+                      >
+                        {{formatPermission(permission)}}
                       </mat-chip>
                       <span *ngIf="role.permissions.length > 3">
                         +{{role.permissions.length - 3}} more
@@ -86,12 +92,22 @@ import { AuthService } from '../../../core/auth/services/auth.service';
               <ng-container matColumnDef="actions">
                 <th mat-header-cell *matHeaderCellDef>Actions</th>
                 <td mat-cell *matCellDef="let role">
-                  <button mat-icon-button color="primary" [routerLink]="['/roles', role._id]" 
-                          matTooltip="Edit Role" *ngIf="authService.hasPermission('roles:write')">
+                  <button 
+                    mat-icon-button 
+                    color="primary" 
+                    [routerLink]="['/roles', role._id]" 
+                    matTooltip="Edit Role" 
+                    *ngIf="canEditRoles"
+                  >
                     <mat-icon>edit</mat-icon>
                   </button>
-                  <button mat-icon-button color="warn" (click)="deleteRole(role._id)"
-                          matTooltip="Delete Role" *ngIf="authService.hasPermission('roles:delete') && !isDefaultRole(role.name)">
+                  <button 
+                    mat-icon-button 
+                    color="warn" 
+                    (click)="deleteRole(role._id)"
+                    matTooltip="Delete Role" 
+                    *ngIf="canDeleteRoles && !isDefaultRole(role.name)"
+                  >
                     <mat-icon>delete</mat-icon>
                   </button>
                 </td>
@@ -164,41 +180,92 @@ import { AuthService } from '../../../core/auth/services/auth.service';
       width: 100px;
       text-align: right;
     }
+    
+    .error-message {
+      color: #f44336;
+      margin-top: 10px;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
   `]
 })
-export class RoleListComponent implements OnInit {
+export class RoleListComponent implements OnInit, OnDestroy {
   roles: Role[] = [];
   isLoading = false;
   displayedColumns: string[] = ['name', 'description', 'permissions', 'actions'];
+  error = '';
+  
+  // Permission flags
+  canCreateRoles = false;
+  canEditRoles = false;
+  canDeleteRoles = false;
+  
+  private userSubscription?: Subscription;
   
   constructor(
     private roleService: RoleService,
     private snackBar: MatSnackBar,
     private router: Router,
-    public authService: AuthService
+    private authService: AuthService
   ) { }
   
   ngOnInit(): void {
+    this.checkPermissions();
     this.loadRoles();
+  }
+  
+  ngOnDestroy(): void {
+    if (this.userSubscription) {
+      this.userSubscription.unsubscribe();
+    }
+  }
+  
+  checkPermissions(): void {
+    this.userSubscription = this.authService.user$.subscribe(user => {
+      if (user) {
+        this.canCreateRoles = this.authService.hasPermission('roles', 'write');
+        this.canEditRoles = this.authService.hasPermission('roles', 'write');
+        this.canDeleteRoles = this.authService.hasPermission('roles', 'delete');
+      }
+    });
   }
   
   loadRoles(): void {
     this.isLoading = true;
+    this.error = '';
+    
     this.roleService.getRoles().subscribe({
       next: (roles) => {
         this.roles = roles;
         this.isLoading = false;
       },
       error: (error) => {
-        console.error('Error loading roles', error);
-        this.snackBar.open('Error loading roles', 'Close', { duration: 3000 });
         this.isLoading = false;
+        this.error = error.message || 'Error loading roles';
+        console.error('Error loading roles', error);
+        this.snackBar.open('Error loading roles: ' + this.error, 'Close', { duration: 3000 });
       }
     });
   }
   
   getDisplayPermissions(permissions: string[]): string[] {
     return permissions.slice(0, 3);
+  }
+  
+  getFormattedPermissions(permissions: string[]): string {
+    return permissions.map(p => this.formatPermission(p)).join(', ');
+  }
+  
+  formatPermission(permission: string): string {
+    // Convert from enum format if needed
+    if (permission.includes('PermissionArea.')) {
+      const match = permission.match(/PermissionArea\.(\w+):PermissionAction\.(\w+)/);
+      if (match && match.length === 3) {
+        const [_, area, action] = match;
+        return `${area.toLowerCase()}:${action.toLowerCase()}`;
+      }
+    }
+    return permission;
   }
   
   isDefaultRole(roleName: string): boolean {
@@ -213,8 +280,9 @@ export class RoleListComponent implements OnInit {
           this.loadRoles();
         },
         error: (error) => {
+          this.error = error.message || 'Error deleting role';
           console.error('Error deleting role', error);
-          this.snackBar.open('Error deleting role', 'Close', { duration: 3000 });
+          this.snackBar.open('Error deleting role: ' + this.error, 'Close', { duration: 3000 });
         }
       });
     }

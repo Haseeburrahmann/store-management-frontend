@@ -4,9 +4,8 @@ import { provideRouter } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { JwtModule } from '@auth0/angular-jwt';
-
 import { routes } from './app.routes';
-import { authInterceptor } from './core/interceptors/auth.interceptor';
+import { authInterceptor } from './core/interceptors/auth.interceptor';  // Import the function
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 
 export function tokenGetter() {
@@ -16,7 +15,7 @@ export function tokenGetter() {
 export const appConfig: ApplicationConfig = {
   providers: [
     provideRouter(routes),
-    provideHttpClient(withInterceptors([authInterceptor])),
+    provideHttpClient(withInterceptors([authInterceptor])),  // Use the function directly
     provideAnimations(),
     importProvidersFrom(
       JwtModule.forRoot({
@@ -26,7 +25,7 @@ export const appConfig: ApplicationConfig = {
           disallowedRoutes: ['localhost:8000/api/v1/auth/login']
         }
       })
-    ), 
+    ),
     provideAnimationsAsync()
   ]
 };

@@ -1,84 +1,125 @@
-/* src/app/features/employee-management/employee-detail/employee-detail.component.scss */
+// src/app/features/employee-management/employee-detail/employee-detail.component.scss
+
 .employee-detail-container {
-    padding: 16px;
-  }
+  padding: 20px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.header-actions {
+  display: flex;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.spacer {
+  flex-grow: 1;
+}
+
+.tab-content {
+  padding: 20px 0;
+}
+
+.info-row {
+  display: flex;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.info-label {
+  font-weight: 500;
+  width: 180px;
+  color: rgba(0, 0, 0, 0.54);
+}
+
+.info-value {
+  flex: 1;
+}
+
+.store-select {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   
-  .header-actions {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 16px;
-  }
-  
-  .spacer {
+  mat-form-field {
     flex: 1;
+    min-width: 250px;
   }
+}
+
+.status-active {
+  color: #0d904f;
+  background-color: #e6f7ed;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  display: inline-block;
+}
+
+.status-on-leave {
+  color: #f57c00;
+  background-color: #fff3e0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  display: inline-block;
+}
+
+.status-terminated {
+  color: #d32f2f;
+  background-color: #ffebee;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  display: inline-block;
+}
+
+.loading-spinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+.not-found {
+  text-align: center;
+}
+
+.not-found-message {
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   
-  .tab-content {
-    padding: 16px;
-  }
-  
-  .info-row {
-    display: flex;
-    margin-bottom: 12px;
-    align-items: center;
-  }
-  
-  .info-label {
-    min-width: 150px;
-    font-weight: 500;
-    color: rgba(0, 0, 0, 0.7);
-  }
-  
-  .info-value {
-    flex: 1;
-  }
-  
-  .store-select {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  
-  .store-select mat-form-field {
-    width: 200px;
-  }
-  
-  .loading-spinner {
-    display: flex;
-    justify-content: center;
-    margin: 40px 0;
-  }
-  
-  .not-found {
-    text-align: center;
-  }
-  
-  .not-found-message {
-    padding: 32px 16px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-  }
-  
-  .not-found-message mat-icon {
+  mat-icon {
     font-size: 48px;
     height: 48px;
     width: 48px;
     color: #f44336;
+    margin-bottom: 16px;
   }
   
-  .status-active {
-    color: green;
-    font-weight: 500;
+  h2 {
+    margin-bottom: 16px;
   }
   
-  .status-on-leave {
-    color: orange;
-    font-weight: 500;
+  p {
+    margin-bottom: 24px;
+    color: rgba(0, 0, 0, 0.54);
   }
-  
-  .status-terminated {
-    color: red;
-    font-weight: 500;
-  }
+}
+
+.button-spinner {
+  display: inline-block;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.error-message {
+  color: #f44336;
+  margin: 16px 0;
+  padding: 12px;
+  background-color: rgba(244, 67, 54, 0.1);
+  border-radius: 4px;
+  border-left: 4px solid #f44336;
+}

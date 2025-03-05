@@ -1,5 +1,5 @@
 // src/app/features/employee-management/employee-detail/employee-detail.component.ts
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
@@ -13,12 +13,18 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { MatSelectModule } from '@angular/material/select';
 import { FormsModule } from '@angular/forms';
-import { Employee } from '../../../core/auth/models/employee.model';
-import { EmployeeService } from '../../../core/auth/services/employee.service';
-import { StoreService } from '../../../core/auth/services/store.service';
-import { AuthService } from '../../../core/auth/services/auth.service';
+import { Employee } from '../../../shared/models/employee.model';
+import { Store } from '../../../shared/models/store.model';
+import { EmployeeService } from '../../../core/services/employee.service';
+import { StoreService } from '../../../core/services/store.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { catchError } from 'rxjs/operators';
-import { of } from 'rxjs';
+import { of, Subscription } from 'rxjs';
+
+// Extended Employee interface for backward compatibility
+interface ExtendedEmployee extends Employee {
+  store_name?: string;
+}
 
 @Component({
   selector: 'app-employee-detail',
@@ -41,16 +47,20 @@ import { of } from 'rxjs';
   templateUrl: './employee-detail.component.html',
   styleUrls: ['./employee-detail.component.scss']
 })
-export class EmployeeDetailComponent implements OnInit {
-  employee: Employee | null = null;
+export class EmployeeDetailComponent implements OnInit, OnDestroy {
+  employee: ExtendedEmployee | null = null;
   isLoading = true;
   employeeId: string = '';
-  stores: any[] = [];
+  stores: Store[] = [];
   selectedStoreId: string = '';
   isAdmin = false;
   isManager = false;
   managedStoreId = '';
   canEdit = false;
+  isAssigningStore = false;
+  error: string = '';
+  
+  private userSubscription: Subscription | null = null;
 
   constructor(
     private route: ActivatedRoute,
@@ -68,6 +78,12 @@ export class EmployeeDetailComponent implements OnInit {
     this.loadEmployee();
     this.checkUserRole();
   }
+  
+  ngOnDestroy(): void {
+    if (this.userSubscription) {
+      this.userSubscription.unsubscribe();
+    }
+  }
 
   loadEmployee(): void {
     if (!this.employeeId) {
@@ -77,82 +93,75 @@ export class EmployeeDetailComponent implements OnInit {
     }
   
     this.isLoading = true;
+    this.error = '';
+    
     this.employeeService.getEmployeeById(this.employeeId)
       .pipe(
         catchError(error => {
-          this.snackBar.open('Error loading employee details', 'Close', { duration: 3000 });
+          this.error = error.message || 'Error loading employee details';
+          console.error('Error loading employee details:', error);
+          this.snackBar.open('Error loading employee details: ' + this.error, 'Close', { duration: 3000 });
           this.router.navigate(['/employees']);
           return of(null);
         })
       )
       .subscribe(employee => {
         if (employee) {
-          console.log('Loaded employee:', employee);
+          // Convert to extended employee for backward compatibility
+          const extendedEmployee: ExtendedEmployee = { ...employee };
           
-          // If the employee has a store_id but no store_name,
-          // try to get the store name from our stores array
-          if (employee.store_id && !employee.store_name && this.stores.length > 0) {
-            const assignedStore = this.stores.find(store => 
-              store._id === employee.store_id || store.id === employee.store_id
-            );
-            
-            if (assignedStore) {
-              employee.store_name = assignedStore.name;
+          // Handle store relationship
+          if (employee.store_id) {
+            // Find store in the already loaded stores
+            if (this.stores.length > 0) {
+              const assignedStore = this.stores.find(store => store._id === employee.store_id);
+              
+              if (assignedStore) {
+                extendedEmployee.store_name = assignedStore.name;
+              }
             }
+          } else if (employee.store && employee.store.name) {
+            // If store data is included in the employee object
+            extendedEmployee.store_name = employee.store.name;
           }
           
-          this.employee = employee;
+          this.employee = extendedEmployee;
           this.selectedStoreId = employee.store_id || '';
-          console.log('Initial selectedStoreId:', this.selectedStoreId);
         }
+        
         this.isLoading = false;
         this.checkEditPermissions();
       });
   }
 
- // src/app/features/employee-management/employee-detail/employee-detail.component.ts
-loadStores(): void {
-  this.storeService.getStores().subscribe(
-    (stores) => {
-      // Log the raw store data to see its structure
-      console.log('Raw store data:', JSON.stringify(stores));
+  loadStores(): void {
+    this.storeService.getStores().subscribe({
+      next: (stores) => {
+        this.stores = stores;
+      },
+      error: (error) => {
+        this.error = error.message || 'Error loading stores';
+        console.error('Error loading stores:', error);
+        this.snackBar.open('Error loading stores: ' + this.error, 'Close', { duration: 3000 });
+      }
+    });
+  }
 
-      // Extract store IDs based on the actual structure
-      this.stores = stores.map(store => {
-        // Look for where the ID might be stored
-        const id = store._id || store.id || (store._id?.$oid);
-        
-        // Create a copy of the store with a guaranteed _id property
-        return {
-          ...store,
-          _id: id || ''  // Fallback to empty string if no ID found
-        };
-      });
-      
-      console.log('Processed stores for dropdown:', this.stores);
-    },
-    (error) => {
-      this.snackBar.open('Error loading stores', 'Close', { duration: 3000 });
-    }
-  );
-}
-
-  // For employee-detail.component.ts
-checkUserRole(): void {
-  this.authService.user$.subscribe(user => {
-    if (user) {
-      // Use hasPermission method to determine roles
-      this.isAdmin = this.authService.hasPermission('PermissionArea.USERS:PermissionAction.APPROVE');
-      this.isManager = this.authService.hasPermission('PermissionArea.EMPLOYEES:PermissionAction.APPROVE') && 
+  checkUserRole(): void {
+    this.userSubscription = this.authService.user$.subscribe(user => {
+      if (user) {
+        // Check permissions using standardized format
+        this.isAdmin = this.authService.hasPermission('users', 'approve');
+        this.isManager = this.authService.hasPermission('employees', 'approve') && 
                        !this.isAdmin;
-      
-      // For managed_store_id we still need to access it
-      this.managedStoreId = (user as any).managed_store_id || '';
-      
-      this.checkEditPermissions();
-    }
-  });
-}
+        
+        // For managed_store_id we still need to access it
+        this.managedStoreId = (user as any).managed_store_id || '';
+        
+        this.checkEditPermissions();
+      }
+    });
+  }
 
   checkEditPermissions(): void {
     if (this.employee) {
@@ -172,10 +181,7 @@ checkUserRole(): void {
     }
   }
 
-  // src/app/features/employee-management/employee-detail/employee-detail.component.ts
   assignToStore(): void {
-    console.log('Trying to assign employee to store. Selected ID:', this.selectedStoreId);
-    
     if (!this.employee) {
       this.snackBar.open('Employee data is not loaded', 'Close', { duration: 3000 });
       return;
@@ -187,40 +193,39 @@ checkUserRole(): void {
     }
   
     // Find the store object that corresponds to the selected ID
-    const selectedStore = this.stores.find(store => 
-      store._id === this.selectedStoreId || store.id === this.selectedStoreId
-    );
+    const selectedStore = this.stores.find(store => store._id === this.selectedStoreId);
     
-    console.log('Selected store object:', selectedStore);
+    this.isAssigningStore = true;
+    this.error = '';
   
     this.employeeService.assignEmployeeToStore(this.employeeId, this.selectedStoreId)
       .pipe(
         catchError(error => {
+          this.isAssigningStore = false;
+          this.error = error.message || 'Error assigning employee to store';
           console.error('Error assigning employee to store:', error);
-          this.snackBar.open('Error assigning employee to store: ' + (error.message || 'Unknown error'), 'Close', { duration: 3000 });
+          this.snackBar.open('Error assigning employee to store: ' + this.error, 'Close', { duration: 3000 });
           return of(null);
         })
       )
       .subscribe(response => {
-        console.log('Assignment response:', response);
+        this.isAssigningStore = false;
+        
         if (response) {
-          // Update the local employee object with the new store information
-          this.employee = {
-            ...response,
-            // Ensure the store_name is set even if not returned by the API
-            store_name: selectedStore ? selectedStore.name : 'Unknown Store'
-          };
+          // Create extended employee with store name
+          const updatedEmployee: ExtendedEmployee = { ...response };
           
+          // Add store_name for backward compatibility
+          if (selectedStore) {
+            updatedEmployee.store_name = selectedStore.name;
+          }
+          
+          this.employee = updatedEmployee;
           this.snackBar.open('Employee assigned to store successfully', 'Close', { duration: 3000 });
           
-          // Force a reload of the employee data after a short delay
-          // This helps ensure the server has processed the assignment
+          // Force a reload after a short delay to ensure server has processed
           setTimeout(() => {
             this.loadEmployee();
-            // Also navigate away and back to ensure a full refresh
-            this.router.navigateByUrl('/employees', { skipLocationChange: true }).then(() => {
-              this.router.navigate(['/employees', this.employeeId]);
-            });
           }, 1000);
         } else {
           this.snackBar.open('Failed to assign employee to store', 'Close', { duration: 3000 });
@@ -236,18 +241,13 @@ checkUserRole(): void {
     this.router.navigate(['/employees', this.employeeId, 'edit']);
   }
 
-  formatDate(date: Date | string): string {
+  formatDate(date: Date | string | undefined): string {
     if (!date) return 'N/A';
     return new Date(date).toLocaleDateString();
   }
 
   storeSelectionChanged(event: any): void {
-    console.log('Store selection changed:', event);
+    // Logging for debugging purposes
     console.log('Selected store ID is now:', this.selectedStoreId);
-    console.log('Selected store ID type:', typeof this.selectedStoreId);
-    
-    // Find the selected store for more info
-    const selectedStore = this.stores.find(s => s._id === this.selectedStoreId);
-    console.log('Selected store object:', selectedStore);
   }
 }
