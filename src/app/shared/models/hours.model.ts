@@ -23,7 +23,7 @@ export interface HoursResponse {
   break_start?: string | Date;
   break_end?: string | Date;
   total_hours?: number;
-  status: HoursStatus;
+  status: HoursStatus ;
   notes?: string;
   approved_by?: string | any;
   approved_at?: string | Date;

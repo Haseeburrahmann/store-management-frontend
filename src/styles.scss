@@ -1,5 +1,4 @@
 // styles.scss - with Modern Indigo theme
-
 // Import Angular Material theming
 @use '@angular/material' as mat;
 
@@ -8,6 +7,7 @@
 
 // Import fonts
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 
 // Define Modern Indigo theme palette
 $store-primary: mat.define-palette(mat.$indigo-palette, 600);

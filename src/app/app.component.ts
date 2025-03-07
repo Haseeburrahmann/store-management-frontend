@@ -4,7 +4,7 @@ import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { AuthService } from './core/services/auth.service';
-import { AppNavigationComponent } from './features/navigation/navigation.component';
+import { NavigationComponent } from './features/navigation/navigation.component';
 
 @Component({
   selector: 'app-root',
@@ -13,7 +13,7 @@ import { AppNavigationComponent } from './features/navigation/navigation.compone
     CommonModule,
     RouterModule,
     MatSnackBarModule,
-    AppNavigationComponent
+    NavigationComponent
   ],
   template: `
     <div *ngIf="isLoggedIn">
@@ -36,6 +36,7 @@ export class AppComponent implements OnInit {
   ngOnInit() {
     this.authService.user$.subscribe(user => {
       this.isLoggedIn = !!user;
+      
     });
   }
 }
