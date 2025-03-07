@@ -1,199 +1,494 @@
 // src/app/core/services/store.service.ts
 
 import { Injectable } from '@angular/core';
-import { Observable, throwError } from 'rxjs';
-import { map, catchError, tap } from 'rxjs/operators';
-import { Store, StoreCreate, StoreUpdate, StoreResponse } from '../../shared/models/store.model';
-import { ApiService } from './api.service';
-import { User } from '../auth/models/user.model';
+import { Observable, throwError, of } from 'rxjs';
+import { catchError, map, shareReplay, tap } from 'rxjs/operators';
+import { HttpContext } from '@angular/common/http';
 
+import { ApiService } from './api.service';
+import { CacheService } from './cache.service';
+import { ErrorService } from './error.service';
+import { ApiConfig } from '../config/api-config';
+import { CacheConfig } from '../config/cache-config';
+import { CACHE_TAGS, CACHE_TTL } from '../interceptors/cache.interceptor';
+import { createAppError, ErrorType } from '../utils/error-handler';
+
+export interface Store {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  zip_code: string;
+  phone: string;
+  email: string;
+  manager_id?: string;
+  manager?: {
+    id: string;
+    full_name: string;
+    email: string;
+  };
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StoreCreate {
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  zip_code: string;
+  phone: string;
+  email: string;
+  manager_id?: string;
+  is_active?: boolean;
+}
+
+export interface StoreUpdate {
+  name?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  phone?: string;
+  email?: string;
+  manager_id?: string | null;
+  is_active?: boolean;
+}
+
+export interface StoreQueryParams {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  city?: string;
+  state?: string;
+  is_active?: boolean;
+  has_manager?: boolean;
+  sort_by?: string;
+  sort_dir?: 'asc' | 'desc';
+}
+
+export interface StoreList {
+  data: Store[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  
+  // Added methods to make StoreList compatible with Store[]
+  filter?: (predicate: (value: Store, index: number, array: Store[]) => unknown) => Store[];
+  length?: number;
+}
+
+/**
+ * Enhanced Store Service with caching and error handling
+ */
 @Injectable({
   providedIn: 'root'
 })
 export class StoreService {
-  private endpoint = '/stores';
+  private readonly baseUrl = ApiConfig.endpoints.stores.base;
+  private readonly cacheKey = CacheConfig.keys.stores;
+  private readonly cacheTags = [CacheConfig.tags.stores];
+  private readonly cacheTTL = CacheConfig.ttl.stores;
 
-  constructor(private apiService: ApiService) { }
+  constructor(
+    private apiService: ApiService,
+    private cacheService: CacheService,
+    private errorService: ErrorService
+  ) {}
 
   /**
-   * Get paginated and filtered list of stores
-   * @param skip Number of items to skip
-   * @param limit Maximum number of items to return
-   * @param search Optional search term
-   * @param status Optional status filter
-   * @returns Observable of Store array
+   * Gets a list of stores with pagination and filtering
+   * 
+   * @param params Query parameters
+   * @returns Observable of store list
    */
-  getStores(
-    skip: number = 0, 
-    limit: number = 100, 
-    search?: string, 
-    status?: string
-  ): Observable<Store[]> {
-    const params = this.apiService.buildParams({
-      skip,
-      limit,
-      search,
-      status
-    });
-    
-    return this.apiService.get<StoreResponse[]>(this.endpoint, params).pipe(
-      map(stores => stores.map(store => this.formatStoreResponse(store))),
+  getStores(params: StoreQueryParams = {}): Observable<StoreList> {
+    const queryParams: Record<string, any> = {
+      page: params.page?.toString() || '1',
+      page_size: params.pageSize?.toString() || '10'
+    };
+
+    // Add optional parameters if provided
+    if (params.search) queryParams['search'] = params.search;
+    if (params.city) queryParams['city'] = params.city;
+    if (params.state) queryParams['state'] = params.state;
+    if (params.is_active !== undefined) queryParams['is_active'] = params.is_active.toString();
+    if (params.has_manager !== undefined) queryParams['has_manager'] = params.has_manager.toString();
+    if (params.sort_by) queryParams['sort_by'] = params.sort_by;
+    if (params.sort_dir) queryParams['sort_dir'] = params.sort_dir;
+
+    // Create cache context with appropriate tags and TTL
+    const context = new HttpContext()
+      .set(CACHE_TAGS, this.cacheTags)
+      .set(CACHE_TTL, this.cacheTTL);
+
+    return this.apiService.get<StoreList>(this.baseUrl, {
+      params: queryParams,
+      context
+    }).pipe(
+      map(response => {
+        // Assuming the API returns a structure with data and pagination
+        const result: StoreList = {
+          data: Array.isArray(response) ? response : (response as any).data || [],
+          total: (response as any).meta?.pagination?.total || 
+                 (Array.isArray(response) ? response.length : (response as any).data?.length || 0),
+          page: parseInt(queryParams['page'], 10),
+          pageSize: parseInt(queryParams['page_size'], 10),
+          totalPages: (response as any).meta?.pagination?.totalPages || 
+                      Math.ceil(((response as any).meta?.pagination?.total || 
+                      (Array.isArray(response) ? response.length : (response as any).data?.length || 0)) / 
+                      parseInt(queryParams['page_size'], 10))
+        };
+        
+        // Add array-like methods to make StoreList compatible with Store[]
+        const data = result.data;
+        result.length = data.length;
+        result.filter = (predicate) => data.filter(predicate);
+        
+        return result;
+      }),
       catchError(error => {
-        console.error('Error fetching stores:', error);
+        this.errorService.logError(error, { 
+          context: 'StoreService.getStores', 
+          params 
+        });
         return throwError(() => error);
-      })
+      }),
+      shareReplay(1)
     );
   }
 
   /**
-   * Get a specific store by ID
+   * Gets a store by ID
+   * 
    * @param id Store ID
-   * @returns Observable of Store
+   * @returns Observable of store
    */
   getStore(id: string): Observable<Store> {
-    const formattedId = id.toString();
+    const url = ApiConfig.endpoints.stores.detail(id);
+    const cacheKey = `${this.cacheKey}_${id}`;
     
-    return this.apiService.get<StoreResponse>(`${this.endpoint}/${formattedId}`).pipe(
-      map(response => this.formatStoreResponse(response)),
+    // Check cache first
+    const cachedStore = this.cacheService.get<Store>(cacheKey);
+    if (cachedStore) {
+      return of(cachedStore);
+    }
+
+    // Create cache context with appropriate tags and TTL
+    const context = new HttpContext()
+      .set(CACHE_TAGS, this.cacheTags)
+      .set(CACHE_TTL, this.cacheTTL);
+
+    return this.apiService.get<Store>(url, { context }).pipe(
+      tap(store => {
+        // Cache the result
+        this.cacheService.set(
+          { key: cacheKey, ttl: this.cacheTTL, tag: this.cacheTags },
+          store
+        );
+      }),
       catchError(error => {
-        console.error(`Error fetching store with ID ${id}:`, error);
+        this.errorService.logError(error, { 
+          context: 'StoreService.getStore', 
+          storeId: id 
+        });
+        
+        if (error.type === ErrorType.NOT_FOUND) {
+          return throwError(() => createAppError({
+            type: ErrorType.NOT_FOUND,
+            message: `Store with ID ${id} not found.`
+          }));
+        }
+        
         return throwError(() => error);
-      })
+      }),
+      shareReplay(1)
     );
   }
 
   /**
-   * Create a new store
-   * @param store Store creation data
-   * @returns Observable of created Store
+   * Creates a new store
+   * 
+   * @param store Store data
+   * @returns Observable of created store
    */
   createStore(store: StoreCreate): Observable<Store> {
-    // Ensure IDs are strings
-    const formattedStore = { ...store };
-    
-    if (formattedStore.manager_id) {
-      formattedStore.manager_id = formattedStore.manager_id.toString();
-    }
-    
-    return this.apiService.post<StoreResponse>(this.endpoint, formattedStore).pipe(
-      map(response => this.formatStoreResponse(response)),
+    return this.apiService.post<Store>(this.baseUrl, store).pipe(
+      tap(_ => {
+        // Invalidate cache
+        this.cacheService.invalidateByTag(CacheConfig.tags.stores);
+      }),
       catchError(error => {
-        console.error('Error creating store:', error);
+        this.errorService.logError(error, { 
+          context: 'StoreService.createStore',
+          storeData: store
+        });
+        
+        // Handle specific validation errors
+        if (error.type === ErrorType.VALIDATION) {
+          return throwError(() => error);
+        }
+        
         return throwError(() => error);
       })
     );
   }
 
   /**
-   * Update an existing store
+   * Updates a store
+   * 
    * @param id Store ID
-   * @param store Store update data
-   * @returns Observable of updated Store
+   * @param store Store data
+   * @returns Observable of updated store
    */
   updateStore(id: string, store: StoreUpdate): Observable<Store> {
-    const formattedId = id.toString();
-    
-    // Ensure IDs are strings
-    const formattedStore = { ...store };
-    
-    if (formattedStore.manager_id) {
-      formattedStore.manager_id = formattedStore.manager_id.toString();
-    }
-    
-    return this.apiService.put<StoreResponse>(`${this.endpoint}/${formattedId}`, formattedStore).pipe(
-      map(response => this.formatStoreResponse(response)),
+    const url = ApiConfig.endpoints.stores.detail(id);
+    const cacheKey = `${this.cacheKey}_${id}`;
+
+    return this.apiService.put<Store>(url, store).pipe(
+      tap(updatedStore => {
+        // Update cache
+        this.cacheService.set(
+          { key: cacheKey, ttl: this.cacheTTL, tag: this.cacheTags },
+          updatedStore
+        );
+        
+        // Invalidate related caches
+        this.cacheService.invalidateByTag(CacheConfig.tags.stores);
+      }),
       catchError(error => {
-        console.error(`Error updating store with ID ${id}:`, error);
+        this.errorService.logError(error, { 
+          context: 'StoreService.updateStore',
+          storeId: id,
+          storeData: store
+        });
+        
+        if (error.type === ErrorType.NOT_FOUND) {
+          return throwError(() => createAppError({
+            type: ErrorType.NOT_FOUND,
+            message: `Store with ID ${id} not found.`
+          }));
+        }
+        
         return throwError(() => error);
       })
     );
   }
 
   /**
-   * Delete a store
+   * Deletes a store
+   * 
    * @param id Store ID
-   * @returns Observable of deletion result
+   * @returns Observable of operation success
    */
-  deleteStore(id: string): Observable<any> {
-    const formattedId = id.toString();
-    
-    return this.apiService.delete(`${this.endpoint}/${formattedId}`).pipe(
+  deleteStore(id: string): Observable<void> {
+    const url = ApiConfig.endpoints.stores.detail(id);
+    const cacheKey = `${this.cacheKey}_${id}`;
+
+    return this.apiService.delete<void>(url).pipe(
+      tap(_ => {
+        // Remove from cache
+        this.cacheService.remove(cacheKey);
+        
+        // Invalidate related caches
+        this.cacheService.invalidateByTag(CacheConfig.tags.stores);
+      }),
       catchError(error => {
-        console.error(`Error deleting store with ID ${id}:`, error);
+        this.errorService.logError(error, { 
+          context: 'StoreService.deleteStore',
+          storeId: id
+        });
+        
+        if (error.type === ErrorType.NOT_FOUND) {
+          return throwError(() => createAppError({
+            type: ErrorType.NOT_FOUND,
+            message: `Store with ID ${id} not found.`
+          }));
+        }
+        
         return throwError(() => error);
       })
     );
   }
 
   /**
-   * Assign a manager to a store
+   * Assigns a manager to a store
+   * 
    * @param storeId Store ID
-   * @param managerId Manager ID
-   * @returns Observable of updated Store
+   * @param managerId User ID of the manager
+   * @returns Observable of updated store
    */
   assignManager(storeId: string, managerId: string): Observable<Store> {
-    const formattedStoreId = storeId.toString();
-    const formattedManagerId = managerId.toString();
-    
-    return this.apiService.put<StoreResponse>(
-      `${this.endpoint}/${formattedStoreId}/assign-manager/${formattedManagerId}`, 
-      {}
-    ).pipe(
-      map(response => this.formatStoreResponse(response)),
+    const url = ApiConfig.endpoints.stores.assignManager(storeId, managerId);
+    const cacheKey = `${this.cacheKey}_${storeId}`;
+
+    return this.apiService.put<Store>(url, {}).pipe(
+      tap(updatedStore => {
+        // Update cache
+        this.cacheService.set(
+          { key: cacheKey, ttl: this.cacheTTL, tag: this.cacheTags },
+          updatedStore
+        );
+        
+        // Invalidate related caches
+        this.cacheService.invalidateByTag(CacheConfig.tags.stores);
+        this.cacheService.invalidateByTag(CacheConfig.tags.users);
+      }),
       catchError(error => {
-        console.error(`Error assigning manager ${managerId} to store ${storeId}:`, error);
+        this.errorService.logError(error, { 
+          context: 'StoreService.assignManager',
+          storeId,
+          managerId
+        });
+        
+        if (error.type === ErrorType.NOT_FOUND) {
+          return throwError(() => createAppError({
+            type: ErrorType.NOT_FOUND,
+            message: `Store or user not found.`
+          }));
+        }
+        
         return throwError(() => error);
       })
     );
   }
 
   /**
-   * Get stores managed by the current user
-   * @returns Observable of Store array
+   * Removes a manager from a store
+   * 
+   * @param storeId Store ID
+   * @returns Observable of updated store
    */
-  getManagedStores(): Observable<Store[]> {
-    return this.apiService.get<StoreResponse[]>(`${this.endpoint}/managed`).pipe(
-      map(stores => stores.map(store => this.formatStoreResponse(store))),
-      catchError(error => {
-        console.error('Error fetching managed stores:', error);
-        return throwError(() => error);
-      })
-    );
+  removeManager(storeId: string): Observable<Store> {
+    // Use updateStore with null manager_id
+    return this.updateStore(storeId, { manager_id: null });
   }
 
- /**
- * Format the store response to ensure consistent structure
- * @param store Store response from API
- * @returns Formatted Store object
- */
-private formatStoreResponse(store: StoreResponse): Store {
-  // Create a properly typed User object for manager if it exists
-  let formattedManager: User | undefined = undefined;
-  
-  if (store.manager) {
-    formattedManager = {
-      _id: store.manager._id ? store.manager._id.toString() : '',
-      email: store.manager.email || '',
-      full_name: store.manager.full_name || '',
-      role_id: store.manager.role_id ? store.manager.role_id.toString() : undefined,
-      is_active: true,  // Default value since it might not be in the API response
-      created_at: new Date().toISOString(), // Default since it might not be in API response
-      updated_at: new Date().toISOString()  // Default since it might not be in API response
-    };
+  /**
+   * Activates or deactivates a store
+   * 
+   * @param id Store ID
+   * @param active Whether to activate or deactivate
+   * @returns Observable of updated store
+   */
+  setStoreActive(id: string, active: boolean): Observable<Store> {
+    return this.updateStore(id, { is_active: active });
+  }
+
+  /**
+   * Clears the store cache
+   */
+  clearCache(): void {
+    this.cacheService.invalidateByTag(CacheConfig.tags.stores);
   }
   
-  return {
-    ...store,
-    _id: store._id ? store._id.toString() : '',
-    manager_id: store.manager_id ? store.manager_id.toString() : undefined,
-    // Use the properly formatted manager
-    manager: formattedManager,
-    created_at: typeof store.created_at === 'string' ? 
-      store.created_at : 
-      new Date(store.created_at).toISOString(),
-    updated_at: typeof store.updated_at === 'string' ? 
-      store.updated_at : 
-      new Date(store.updated_at).toISOString()
-  };
-}
+  /**
+   * Gets all stores without pagination (for dropdowns, etc.)
+   * 
+   * @returns Observable of stores array
+   */
+  getAllStores(): Observable<Store[]> {
+    const url = this.baseUrl;
+    const cacheKey = `${this.cacheKey}_all`;
+    
+    // Check cache first
+    const cachedStores = this.cacheService.get<Store[]>(cacheKey);
+    if (cachedStores) {
+      return of(cachedStores);
+    }
+    
+    // Set a large page size to get all stores
+    const queryParams = {
+      'page_size': '1000',
+      'is_active': 'true'
+    };
+    
+    // Create cache context with appropriate tags and TTL
+    const context = new HttpContext()
+      .set(CACHE_TAGS, this.cacheTags)
+      .set(CACHE_TTL, this.cacheTTL);
+    
+    return this.apiService.get<StoreList>(url, {
+      params: queryParams,
+      context
+    }).pipe(
+      map(response => {
+        // Get the data array from the response
+        const stores = Array.isArray(response) ? response : 
+                     (response as any).data || [];
+        
+        // Cache the result
+        this.cacheService.set(
+          { key: cacheKey, ttl: this.cacheTTL, tag: this.cacheTags },
+          stores
+        );
+        
+        return stores;
+      }),
+      catchError(error => {
+        this.errorService.logError(error, { 
+          context: 'StoreService.getAllStores'
+        });
+        return throwError(() => error);
+      }),
+      shareReplay(1)
+    );
+  }
+  
+  /**
+   * Gets stores managed by a specific user
+   * 
+   * @param managerId Manager user ID
+   * @returns Observable of stores array
+   */
+  getStoresByManager(managerId: string): Observable<Store[]> {
+    const cacheKey = `${this.cacheKey}_manager_${managerId}`;
+    
+    // Check cache first
+    const cachedStores = this.cacheService.get<Store[]>(cacheKey);
+    if (cachedStores) {
+      return of(cachedStores);
+    }
+    
+    const queryParams = {
+      'manager_id': managerId,
+      'is_active': 'true',
+      'page_size': '1000' // Large page size to get all stores
+    };
+    
+    // Create cache context with appropriate tags and TTL
+    const context = new HttpContext()
+      .set(CACHE_TAGS, this.cacheTags)
+      .set(CACHE_TTL, this.cacheTTL);
+    
+    return this.apiService.get<StoreList>(this.baseUrl, {
+      params: queryParams,
+      context
+    }).pipe(
+      map(response => {
+        // Get the data array from the response
+        const stores = Array.isArray(response) ? response : 
+                     (response as any).data || [];
+        
+        // Cache the result
+        this.cacheService.set(
+          { key: cacheKey, ttl: this.cacheTTL, tag: this.cacheTags },
+          stores
+        );
+        
+        return stores;
+      }),
+      catchError(error => {
+        this.errorService.logError(error, { 
+          context: 'StoreService.getStoresByManager',
+          managerId
+        });
+        return throwError(() => error);
+      }),
+      shareReplay(1)
+    );
+  }
 }

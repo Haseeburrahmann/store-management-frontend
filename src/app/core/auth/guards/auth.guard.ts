@@ -2,6 +2,7 @@
 
 import { Injectable } from '@angular/core';
 import { Router, CanActivate, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
+import { Observable, map, of } from 'rxjs';
 import { AuthService } from '../../services/auth.service';
 
 @Injectable({
@@ -11,7 +12,7 @@ export class AuthGuard implements CanActivate {
   
   constructor(private authService: AuthService, private router: Router) { }
   
-  canActivate(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): boolean {
+  canActivate(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): boolean | Observable<boolean> {
     if (this.authService.isAuthenticated()) {
       // Check for required permissions if specified
       const requiredPermission = route.data['permission'] as string;
@@ -22,6 +23,8 @@ export class AuthGuard implements CanActivate {
           const [area, action] = requiredPermission.split(':');
           if (!this.authService.hasPermission(area, action)) {
             console.warn(`Access denied: Missing permission ${requiredPermission}`);
+            
+            // Return to dashboard instead of abruptly failing
             this.router.navigate(['/dashboard']);
             return false;
           }
@@ -40,10 +43,11 @@ export class AuthGuard implements CanActivate {
       return true;
     }
     
-    // Not logged in, redirect to login page
+    // Not logged in, redirect to login page with return URL
     this.router.navigate(['/login'], { 
       queryParams: { returnUrl: state.url }
     });
+    
     return false;
   }
 }

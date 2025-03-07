@@ -1,141 +1,509 @@
-// styles.scss - with Modern Indigo theme
-// Import Angular Material theming
+/* src/styles.scss */
+
+/* Import Material theming */
 @use '@angular/material' as mat;
 
-// Include the common styles for Angular Material
+/* Include the common styles for Angular Material */
 @include mat.core();
 
-// Import fonts
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/* Define color palettes */
+$primary-palette: (
+  50: #e8eaf6,
+  100: #c5cae9,
+  200: #9fa8da,
+  300: #7986cb,
+  400: #5c6bc0,
+  500: #3f51b5,  /* Indigo 500 - Primary color */
+  600: #3949ab,
+  700: #303f9f,
+  800: #283593,
+  900: #1a237e,
+  contrast: (
+    50: rgba(0, 0, 0, 0.87),
+    100: rgba(0, 0, 0, 0.87),
+    200: rgba(0, 0, 0, 0.87),
+    300: white,
+    400: white,
+    500: white,
+    600: white,
+    700: white,
+    800: white,
+    900: white,
+  )
+);
 
+$accent-palette: (
+  50: #fce4ec,
+  100: #f8bbd0,
+  200: #f48fb1,
+  300: #f06292,
+  400: #ec407a,
+  500: #e91e63,  /* Pink 500 - Accent color */
+  600: #d81b60,
+  700: #c2185b,
+  800: #ad1457,
+  900: #880e4f,
+  A100: #ff80ab,
+  A200: #ff4081,  /* Pink A200 - Accent color used in our app */
+  A400: #f50057,
+  A700: #c51162,
+  contrast: (
+    50: rgba(0, 0, 0, 0.87),
+    100: rgba(0, 0, 0, 0.87),
+    200: rgba(0, 0, 0, 0.87),
+    300: rgba(0, 0, 0, 0.87),
+    400: rgba(0, 0, 0, 0.87),
+    500: white,
+    600: white,
+    700: white,
+    800: white,
+    900: white,
+    A100: rgba(0, 0, 0, 0.87),
+    A200: white,
+    A400: white,
+    A700: white,
+  )
+);
 
-// Define Modern Indigo theme palette
-$store-primary: mat.define-palette(mat.$indigo-palette, 600);
-$store-accent: mat.define-palette(mat.$cyan-palette, A200, A100, A400);
-$store-warn: mat.define-palette(mat.$red-palette);
+$warn-palette: (
+  50: #ffebee,
+  100: #ffcdd2,
+  200: #ef9a9a,
+  300: #e57373,
+  400: #ef5350,
+  500: #f44336,  /* Red 500 - Warn color */
+  600: #e53935,
+  700: #d32f2f,
+  800: #c62828,
+  900: #b71c1c,
+  contrast: (
+    50: rgba(0, 0, 0, 0.87),
+    100: rgba(0, 0, 0, 0.87),
+    200: rgba(0, 0, 0, 0.87),
+    300: rgba(0, 0, 0, 0.87),
+    400: rgba(0, 0, 0, 0.87),
+    500: white,
+    600: white,
+    700: white,
+    800: white,
+    900: white,
+  )
+);
 
-// Create the theme
-$store-theme: mat.define-light-theme((
+/* Define the palettes for your theme */
+$app-primary: mat.define-palette($primary-palette);
+$app-accent: mat.define-palette($accent-palette, A200, A100, A400);
+$app-warn: mat.define-palette($warn-palette);
+
+/* Create the theme object */
+$app-theme: mat.define-light-theme((
   color: (
-    primary: $store-primary,
-    accent: $store-accent,
-    warn: $store-warn,
-  ),
-  typography: mat.define-typography-config(
-    $font-family: 'Inter, sans-serif',
-  ),
-  density: 0,
+    primary: $app-primary,
+    accent: $app-accent,
+    warn: $app-warn,
+  )
 ));
 
-// Include theme styles
-@include mat.all-component-themes($store-theme);
+/* Include theme styles for core and each component */
+@include mat.all-component-themes($app-theme);
 
-// Custom theme variables
-:root {
-  --primary-color: #3949ab;
-  --primary-light: #6f74dd;
-  --primary-dark: #00227b;
-  --accent-color: #00e5ff;
-  --text-color: #263238;
-  --background-color: #f8f9fa;
-  --sidebar-color: #ffffff;
-  --card-color: #ffffff;
-  --border-radius: 8px;
-  --box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+/* Dark theme */
+$app-dark-theme: mat.define-dark-theme((
+  color: (
+    primary: $app-primary,
+    accent: $app-accent,
+    warn: $app-warn,
+  )
+));
+
+.dark-theme {
+  @include mat.all-component-colors($app-dark-theme);
 }
 
-// Global styles
+/* Global styles */
 html, body {
   height: 100%;
   margin: 0;
-  padding: 0;
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+  background-color: #f5f5f5;
+  color: rgba(0, 0, 0, 0.87);
 }
 
-body {
-  font-family: 'Inter', sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  color: var(--text-color);
-  background-color: var(--background-color);
-}
-
-// Layout components
-.app-header {
-  background-color: var(--primary-color);
+.dark-theme {
+  background-color: #303030;
   color: white;
-  padding: 0.5rem 1rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.app-sidebar {
-  background-color: var(--sidebar-color);
-  border-right: 1px solid rgba(0, 0, 0, 0.05);
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+/* CSS Variables for colors */
+:root {
+  /* These variables will be overridden by ThemeService */
+  --app-primary: #3f51b5;
+  --app-primary-rgb: 63, 81, 181;
+  --app-secondary: #673ab7;
+  --app-accent: #ff4081;
+  --app-success: #4caf50;
+  --app-warning: #ff9800;
+  --app-error: #f44336;
+  --app-info: #2196f3;
+  --app-background: #f5f5f5;
+  --app-surface: #ffffff;
+  --app-text: #212121;
 }
 
-.dashboard-card {
-  background-color: var(--card-color);
-  border-radius: var(--border-radius);
-  padding: 1.5rem;
-  box-shadow: var(--box-shadow);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-  
-  &:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
-  }
-}
-
-.stats-card {
-  border-left: 4px solid var(--primary-color);
-}
-
-// Utility classes
-.full-width {
-  width: 100%;
-}
-
-.container {
-  padding: 20px;
-  box-sizing: border-box;
-}
-
+/* Common utility classes */
 .text-center {
   text-align: center;
 }
 
-.flex {
-  display: flex;
+.text-right {
+  text-align: right;
 }
 
-.flex-col {
-  flex-direction: column;
+.full-width {
+  width: 100%;
 }
 
-.items-center {
-  align-items: center;
+.spacer {
+  flex: 1 1 auto;
 }
 
-.justify-between {
-  justify-content: space-between;
+.p-0 {
+  padding: 0 !important;
 }
 
-.justify-center {
-  justify-content: center;
+.p-1 {
+  padding: 0.25rem !important;
 }
 
-.gap-4 {
-  gap: 1rem;
+.p-2 {
+  padding: 0.5rem !important;
 }
 
-.mb-4 {
-  margin-bottom: 1rem;
-}
-
-.mt-4 {
-  margin-top: 1rem;
+.p-3 {
+  padding: 1rem !important;
 }
 
 .p-4 {
-  padding: 1rem;
+  padding: 1.5rem !important;
+}
+
+.p-5 {
+  padding: 3rem !important;
+}
+
+.m-0 {
+  margin: 0 !important;
+}
+
+.m-1 {
+  margin: 0.25rem !important;
+}
+
+.m-2 {
+  margin: 0.5rem !important;
+}
+
+.m-3 {
+  margin: 1rem !important;
+}
+
+.m-4 {
+  margin: 1.5rem !important;
+}
+
+.m-5 {
+  margin: 3rem !important;
+}
+
+.mt-1 {
+  margin-top: 0.25rem !important;
+}
+
+.mt-2 {
+  margin-top: 0.5rem !important;
+}
+
+.mt-3 {
+  margin-top: 1rem !important;
+}
+
+.mt-4 {
+  margin-top: 1.5rem !important;
+}
+
+.mt-5 {
+  margin-top: 3rem !important;
+}
+
+.mb-1 {
+  margin-bottom: 0.25rem !important;
+}
+
+.mb-2 {
+  margin-bottom: 0.5rem !important;
+}
+
+.mb-3 {
+  margin-bottom: 1rem !important;
+}
+
+.mb-4 {
+  margin-bottom: 1.5rem !important;
+}
+
+.mb-5 {
+  margin-bottom: 3rem !important;
+}
+
+/* Flex utility classes */
+.d-flex {
+  display: flex !important;
+}
+
+.flex-row {
+  flex-direction: row !important;
+}
+
+.flex-column {
+  flex-direction: column !important;
+}
+
+.justify-content-start {
+  justify-content: flex-start !important;
+}
+
+.justify-content-end {
+  justify-content: flex-end !important;
+}
+
+.justify-content-center {
+  justify-content: center !important;
+}
+
+.justify-content-between {
+  justify-content: space-between !important;
+}
+
+.justify-content-around {
+  justify-content: space-around !important;
+}
+
+.align-items-start {
+  align-items: flex-start !important;
+}
+
+.align-items-end {
+  align-items: flex-end !important;
+}
+
+.align-items-center {
+  align-items: center !important;
+}
+
+.align-items-stretch {
+  align-items: stretch !important;
+}
+
+.flex-wrap {
+  flex-wrap: wrap !important;
+}
+
+/* Gap utilities */
+.gap-1 {
+  gap: 0.25rem !important;
+}
+
+.gap-2 {
+  gap: 0.5rem !important;
+}
+
+.gap-3 {
+  gap: 1rem !important;
+}
+
+.gap-4 {
+  gap: 1.5rem !important;
+}
+
+.gap-5 {
+  gap: 3rem !important;
+}
+
+/* Text colors */
+.text-primary {
+  color: var(--app-primary) !important;
+}
+
+.text-secondary {
+  color: var(--app-secondary) !important;
+}
+
+.text-accent {
+  color: var(--app-accent) !important;
+}
+
+.text-success {
+  color: var(--app-success) !important;
+}
+
+.text-warning {
+  color: var(--app-warning) !important;
+}
+
+.text-error {
+  color: var(--app-error) !important;
+}
+
+.text-info {
+  color: var(--app-info) !important;
+}
+
+/* Background colors */
+.bg-primary {
+  background-color: var(--app-primary) !important;
+  color: white !important;
+}
+
+.bg-secondary {
+  background-color: var(--app-secondary) !important;
+  color: white !important;
+}
+
+.bg-accent {
+  background-color: var(--app-accent) !important;
+  color: white !important;
+}
+
+.bg-success {
+  background-color: var(--app-success) !important;
+  color: white !important;
+}
+
+.bg-warning {
+  background-color: var(--app-warning) !important;
+  color: rgba(0, 0, 0, 0.87) !important;
+}
+
+.bg-error {
+  background-color: var(--app-error) !important;
+  color: white !important;
+}
+
+.bg-info {
+  background-color: var(--app-info) !important;
+  color: white !important;
+}
+
+/* Card layout utilities */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.card-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.card-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.card-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 1200px) {
+  .card-grid-4 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 992px) {
+  .card-grid-3, .card-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .card-grid-2, .card-grid-3, .card-grid-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Main container styles */
+.main-container {
+  padding: 20px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+/* Elevation */
+.elevation-1 {
+  box-shadow: 0 2px 1px -1px rgba(0,0,0,.2), 0 1px 1px 0 rgba(0,0,0,.14), 0 1px 3px 0 rgba(0,0,0,.12);
+}
+
+.elevation-2 {
+  box-shadow: 0 3px 1px -2px rgba(0,0,0,.2), 0 2px 2px 0 rgba(0,0,0,.14), 0 1px 5px 0 rgba(0,0,0,.12);
+}
+
+.elevation-3 {
+  box-shadow: 0 3px 3px -2px rgba(0,0,0,.2), 0 3px 4px 0 rgba(0,0,0,.14), 0 1px 8px 0 rgba(0,0,0,.12);
+}
+
+.elevation-4 {
+  box-shadow: 0 2px 4px -1px rgba(0,0,0,.2), 0 4px 5px 0 rgba(0,0,0,.14), 0 1px 10px 0 rgba(0,0,0,.12);
+}
+
+.elevation-5 {
+  box-shadow: 0 3px 5px -1px rgba(0,0,0,.2), 0 5px 8px 0 rgba(0,0,0,.14), 0 1px 14px 0 rgba(0,0,0,.12);
+}
+
+/* Animation classes */
+.fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
+
+.slide-in-up {
+  animation: slideInUp 0.3s ease-out;
+}
+
+.slide-in-left {
+  animation: slideInLeft 0.3s ease-out;
+}
+
+.slide-in-right {
+  animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Page transitions for router-outlet */
+:root router-outlet ~ * {
+  display: block;
+  animation: fadeIn 0.3s ease-in;
 }
