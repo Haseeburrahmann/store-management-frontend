@@ -20,13 +20,14 @@ import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { Subscription } from 'rxjs';
 
-import { HoursService } from '../../../core/auth/services/hours.service';
-import { AuthService } from '../../../core/auth/services/auth.service';
-import { StoreService } from '../../../core/auth/services/store.service';
-import { EmployeeService } from '../../../core/auth/services/employee.service';
-import { Hours, HoursStatus } from '../../../core/auth/models/hours.model';
+// Updated import paths
+import { HoursService } from '../../../core/services/hours.service';
+import { AuthService } from '../../../core/services/auth.service';
+import { StoreService } from '../../../core/services/store.service';
+import { EmployeeService } from '../../../core/services/employee.service';
+import { Hours, HoursStatus } from '../../../shared/models/hours.model';
 import { Store } from '../../../shared/models/store.model';
-import { Employee } from '../../../core/auth/models/employee.model';
+import { Employee } from '../../../shared/models/employee.model';
 
 @Component({
   selector: 'app-hours-list',
@@ -139,7 +140,7 @@ import { Employee } from '../../../core/auth/models/employee.model';
               <ng-container matColumnDef="date">
                 <th mat-header-cell *matHeaderCellDef mat-sort-header>Date</th>
                 <td mat-cell *matCellDef="let hour">
-                  {{ formatDate(hour.clock_in) | date:'shortDate' }}
+                  {{ formatDate(hour.date) | date:'shortDate' }}
                 </td>
               </ng-container>
               
@@ -147,7 +148,7 @@ import { Employee } from '../../../core/auth/models/employee.model';
               <ng-container matColumnDef="employee">
                 <th mat-header-cell *matHeaderCellDef mat-sort-header>Employee</th>
                 <td mat-cell *matCellDef="let hour">
-                  {{ hour.employee_name || 'Unknown Employee' }}
+                  {{ hour.employee?.full_name || 'Unknown Employee' }}
                 </td>
               </ng-container>
               
@@ -155,7 +156,7 @@ import { Employee } from '../../../core/auth/models/employee.model';
               <ng-container matColumnDef="store">
                 <th mat-header-cell *matHeaderCellDef mat-sort-header>Store</th>
                 <td mat-cell *matCellDef="let hour">
-                  {{ hour.store_name || 'Unknown Store' }}
+                  {{ hour.store?.name || 'Unknown Store' }}
                 </td>
               </ng-container>
               
@@ -179,7 +180,7 @@ import { Employee } from '../../../core/auth/models/employee.model';
               <ng-container matColumnDef="hours">
                 <th mat-header-cell *matHeaderCellDef mat-sort-header>Hours</th>
                 <td mat-cell *matCellDef="let hour">
-                  {{ hour.total_minutes !== undefined && hour.total_minutes !== null ? ((hour.total_minutes || 0) / 60).toFixed(2) : '-' }}
+                  {{ calculateTotalHours(hour) }}
                 </td>
               </ng-container>
               
@@ -306,11 +307,11 @@ export class HoursListComponent implements OnInit, OnDestroy {
         this.currentUserId = user._id;
         
         // Use hasPermission method to determine roles
-        this.isAdmin = this.authService.hasPermission('PermissionArea.USERS:PermissionAction.APPROVE');
-        this.isManager = this.authService.hasPermission('PermissionArea.EMPLOYEES:PermissionAction.APPROVE') && 
+        this.isAdmin = this.authService.hasPermission('users', 'approve');
+        this.isManager = this.authService.hasPermission('employees', 'approve') && 
                         !this.isAdmin; // Manager is someone with employee approve permissions but not admin
         
-        this.canApprove = this.authService.hasPermission('PermissionArea.HOURS:PermissionAction.APPROVE');
+        this.canApprove = this.authService.hasPermission('hours', 'approve');
         
         // If not admin or manager, employee can only see their own hours
         if (!this.isAdmin && !this.isManager) {
@@ -407,12 +408,12 @@ export class HoursListComponent implements OnInit, OnDestroy {
             // Apply date filters if selected
             if (filters.start_date) {
               const startDate = new Date(filters.start_date);
-              this.hours = this.hours.filter(h => new Date(h.clock_in) >= startDate);
+              this.hours = this.hours.filter(h => new Date(h.date) >= startDate);
             }
             
             if (filters.end_date) {
               const endDate = new Date(filters.end_date);
-              this.hours = this.hours.filter(h => new Date(h.clock_in) <= endDate);
+              this.hours = this.hours.filter(h => new Date(h.date) <= endDate);
             }
             
             this.loading = false;
@@ -453,7 +454,6 @@ export class HoursListComponent implements OnInit, OnDestroy {
   }
   
   loadAllEmployees(): void {
-    // Use the EmployeeService instead of AuthService
     this.employeeService.getEmployees().subscribe({
       next: (employees: Employee[]) => {
         this.employees = employees;
@@ -465,7 +465,6 @@ export class HoursListComponent implements OnInit, OnDestroy {
   }
   
   loadEmployeesByStore(storeId: string): void {
-    // Use the EmployeeService instead of AuthService
     this.employeeService.getEmployeesByStore(storeId).subscribe({
       next: (employees: Employee[]) => {
         this.employees = employees;
@@ -510,7 +509,7 @@ export class HoursListComponent implements OnInit, OnDestroy {
   
   canDelete(hour: Hours): boolean {
     // Similar logic to canEdit but may be more restrictive
-    return this.canEdit(hour) && this.authService.hasPermission('PermissionArea.HOURS:PermissionAction.DELETE');
+    return this.canEdit(hour) && this.authService.hasPermission('hours', 'delete');
   }
   
   deleteHours(hour: Hours): void {
@@ -530,6 +529,35 @@ export class HoursListComponent implements OnInit, OnDestroy {
   formatDate(date: string | Date | undefined): Date {
     if (!date) return new Date();
     return new Date(date);
+  }
+  
+  calculateTotalHours(hour: Hours): string {
+    if (!hour.clock_in || !hour.clock_out) {
+      return '-';
+    }
+
+    try {
+      const clockIn = new Date(hour.clock_in);
+      const clockOut = new Date(hour.clock_out);
+      
+      // Calculate difference in milliseconds
+      let diffMs = clockOut.getTime() - clockIn.getTime();
+      
+      // Subtract break time if available
+      if (hour.break_start && hour.break_end) {
+        const breakStart = new Date(hour.break_start);
+        const breakEnd = new Date(hour.break_end);
+        const breakMs = breakEnd.getTime() - breakStart.getTime();
+        diffMs -= breakMs;
+      }
+      
+      // Convert to hours with 2 decimal places
+      const hours = diffMs / (1000 * 60 * 60);
+      return hours.toFixed(2);
+    } catch (error) {
+      console.error('Error calculating hours:', error);
+      return '-';
+    }
   }
   
   getStatusClass(status: string): string {

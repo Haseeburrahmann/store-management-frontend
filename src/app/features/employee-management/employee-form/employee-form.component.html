@@ -1,185 +1,185 @@
-<!-- src/app/features/employee-management/employee-form/employee-form.component.html -->
 <div class="employee-form-container">
-    <div *ngIf="isLoading" class="loading-spinner">
-      <mat-spinner diameter="40"></mat-spinner>
-    </div>
-  
-    <div *ngIf="!isLoading">
-      <div class="header-actions">
-        <button mat-button color="primary" (click)="onCancel()">
-          <mat-icon>arrow_back</mat-icon> Cancel
-        </button>
-      </div>
-  
-      <mat-card>
-        <mat-card-header>
-          <mat-card-title>{{ isEditMode ? 'Edit Employee' : 'Create New Employee' }}</mat-card-title>
-        </mat-card-header>
-        
-        <mat-card-content>
-          <form [formGroup]="employeeForm" (ngSubmit)="onSubmit()">
-            <div class="form-section">
-              <h3>Basic Information</h3>
-              
-              <div class="form-row">
-                <mat-form-field appearance="outline">
-                  <mat-label>Full Name</mat-label>
-                  <input matInput formControlName="full_name" placeholder="John Doe">
-                  <mat-error *ngIf="employeeForm.get('full_name')?.errors?.['required']">
-                    Full name is required
-                  </mat-error>
-                </mat-form-field>
-                
-                <mat-form-field appearance="outline">
-                  <mat-label>Email</mat-label>
-                  <input matInput formControlName="email" placeholder="john.doe@example.com" type="email">
-                  <mat-error *ngIf="employeeForm.get('email')?.errors?.['required']">
-                    Email is required
-                  </mat-error>
-                  <mat-error *ngIf="employeeForm.get('email')?.errors?.['email']">
-                    Please enter a valid email address
-                  </mat-error>
-                </mat-form-field>
-              </div>
-  
-              <div class="form-row">
-                <mat-form-field appearance="outline">
-                  <mat-label>Phone Number</mat-label>
-                  <input matInput formControlName="phone_number" placeholder="555-123-4567">
-                </mat-form-field>
-                
-                <mat-form-field appearance="outline" *ngIf="!isEditMode">
-                  <mat-label>Password</mat-label>
-                  <input matInput formControlName="password" type="password">
-                  <mat-error *ngIf="employeeForm.get('password')?.errors?.['required']">
-                    Password is required
-                  </mat-error>
-                </mat-form-field>
-              </div>
-  
-              <div class="form-row">
-                <mat-form-field appearance="outline">
-                  <mat-label>Position</mat-label>
-                  <input matInput formControlName="position" placeholder="Sales Associate">
-                  <mat-error *ngIf="employeeForm.get('position')?.errors?.['required']">
-                    Position is required
-                  </mat-error>
-                </mat-form-field>
-                
-                <mat-form-field appearance="outline">
-                  <mat-label>Hourly Rate</mat-label>
-                  <input matInput formControlName="hourly_rate" type="number" step="0.01" min="0">
-                  <span matSuffix>$/hour</span>
-                  <mat-error *ngIf="employeeForm.get('hourly_rate')?.errors?.['required']">
-                    Hourly rate is required
-                  </mat-error>
-                  <mat-error *ngIf="employeeForm.get('hourly_rate')?.errors?.['min']">
-                    Hourly rate must be positive
-                  </mat-error>
-                </mat-form-field>
-              </div>
-  
-              <div class="form-row">
-                <mat-form-field appearance="outline">
-                  <mat-label>Employment Status</mat-label>
-                  <mat-select formControlName="employment_status">
-                    <mat-option value="active">Active</mat-option>
-                    <mat-option value="on_leave">On Leave</mat-option>
-                    <mat-option value="terminated">Terminated</mat-option>
-                  </mat-select>
-                </mat-form-field>
-                
-                <mat-form-field appearance="outline">
-                  <mat-label>Hire Date</mat-label>
-                  <input matInput [matDatepicker]="picker" formControlName="hire_date">
-                  <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
-                  <mat-datepicker #picker></mat-datepicker>
-                </mat-form-field>
-              </div>
-  
-              <div class="form-row">
-                <mat-form-field appearance="outline">
-                  <mat-label>Store</mat-label>
-                  <mat-select formControlName="store_id">
-                    <mat-option value="">Not Assigned</mat-option>
-                    <mat-option *ngFor="let store of stores" [value]="store._id">{{ store.name }}</mat-option>
-                  </mat-select>
-                </mat-form-field>
-                
-                <mat-form-field appearance="outline" *ngIf="isAdmin">
-                  <mat-label>Role</mat-label>
-                  <mat-select formControlName="role_id">
-                    <mat-option value="">Select Role</mat-option>
-                    <mat-option *ngFor="let role of roles" [value]="role._id">{{ role.name }}</mat-option>
-                  </mat-select>
-                </mat-form-field>
-              </div>
-  
-              <div class="form-row">
-                <mat-checkbox formControlName="is_active">Active Account</mat-checkbox>
-              </div>
-            </div>
-  
-            <mat-divider></mat-divider>
-  
-            <div class="form-section">
-              <h3>Contact Information</h3>
-              
-              <div class="form-row">
-                <mat-form-field appearance="outline">
-                  <mat-label>Address</mat-label>
-                  <input matInput formControlName="address" placeholder="123 Main St">
-                </mat-form-field>
-              </div>
-  
-              <div class="form-row">
-                <mat-form-field appearance="outline">
-                  <mat-label>City</mat-label>
-                  <input matInput formControlName="city" placeholder="City">
-                </mat-form-field>
-                
-                <mat-form-field appearance="outline">
-                  <mat-label>State</mat-label>
-                  <input matInput formControlName="state" placeholder="State">
-                </mat-form-field>
-                
-                <mat-form-field appearance="outline">
-                  <mat-label>Zip Code</mat-label>
-                  <input matInput formControlName="zip_code" placeholder="00000">
-                </mat-form-field>
-              </div>
-            </div>
-  
-            <mat-divider></mat-divider>
-  
-            <div class="form-section">
-              <h3>Emergency Contact</h3>
-              
-              <div class="form-row">
-                <mat-form-field appearance="outline">
-                  <mat-label>Contact Name</mat-label>
-                  <input matInput formControlName="emergency_contact_name" placeholder="Jane Doe">
-                </mat-form-field>
-                
-                <mat-form-field appearance="outline">
-                  <mat-label>Contact Phone</mat-label>
-                  <input matInput formControlName="emergency_contact_phone" placeholder="555-123-4567">
-                </mat-form-field>
-              </div>
-            </div>
-  
-            <div class="form-actions">
-              <button mat-button type="button" (click)="onCancel()">Cancel</button>
-              <button mat-raised-button color="primary" type="submit" [disabled]="submitInProgress">
-                <mat-spinner diameter="20" *ngIf="submitInProgress"></mat-spinner>
-                <ng-container *ngIf="!submitInProgress">
-                  <span *ngIf="isEditMode">Update</span>
-                  <span *ngIf="!isEditMode">Create</span>
-                </ng-container>
-              </button>
-            </div>
-          </form>
-        </mat-card-content>
-      </mat-card>
-    </div>
+  <div *ngIf="isLoading" class="loading-spinner">
+    <mat-spinner diameter="40"></mat-spinner>
   </div>
+
+  <div *ngIf="!isLoading">
+    <div class="header-actions">
+      <button mat-button color="primary" (click)="onCancel()">
+        <mat-icon>arrow_back</mat-icon> Cancel
+      </button>
+    </div>
+
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>{{ isEditMode ? 'Edit Employee' : 'Create New Employee' }}</mat-card-title>
+      </mat-card-header>
+
+      <mat-card-content>
+        <form [formGroup]="employeeForm" (ngSubmit)="onSubmit()">
+          <div class="form-section">
+            <h3>Basic Information</h3>
+
+            <div class="form-row">
+              <mat-form-field appearance="outline">
+                <mat-label>User</mat-label>
+                <mat-select formControlName="user_id" (selectionChange)="onUserSelect($event.value)">
+                  <mat-option *ngFor="let user of users" [value]="user._id">{{ user.full_name }}</mat-option>
+                </mat-select>
+                <mat-error *ngIf="employeeForm.get('user_id')?.errors?.['required']">
+                  User is required
+                </mat-error>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Full Name</mat-label>
+                <input matInput formControlName="full_name" placeholder="John Doe" readonly>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Email</mat-label>
+                <input matInput formControlName="email" placeholder="john.doe@example.com" type="email" readonly>
+              </mat-form-field>
+            </div>
+
+            <div class="form-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Phone Number</mat-label>
+                <input matInput formControlName="phone_number" placeholder="555-123-4567">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" *ngIf="!isEditMode">
+                <mat-label>Password</mat-label>
+                <input matInput formControlName="password" type="password">
+                <mat-error *ngIf="employeeForm.get('password')?.errors?.['required']">
+                  Password is required
+                </mat-error>
+              </mat-form-field>
+            </div>
+
+            <div class="form-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Position</mat-label>
+                <input matInput formControlName="position" placeholder="Sales Associate">
+                <mat-error *ngIf="employeeForm.get('position')?.errors?.['required']">
+                  Position is required
+                </mat-error>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Hourly Rate</mat-label>
+                <input matInput formControlName="hourly_rate" type="number" step="0.01" min="0">
+                <span matSuffix>$/hour</span>
+                <mat-error *ngIf="employeeForm.get('hourly_rate')?.errors?.['required']">
+                  Hourly rate is required
+                </mat-error>
+                <mat-error *ngIf="employeeForm.get('hourly_rate')?.errors?.['min']">
+                  Hourly rate must be positive
+                </mat-error>
+              </mat-form-field>
+            </div>
+
+            <div class="form-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Employment Status</mat-label>
+                <mat-select formControlName="employment_status">
+                  <mat-option value="active">Active</mat-option>
+                  <mat-option value="on_leave">On Leave</mat-option>
+                  <mat-option value="terminated">Terminated</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Hire Date</mat-label>
+                <input matInput [matDatepicker]="picker" formControlName="hire_date">
+                <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+                <mat-datepicker #picker></mat-datepicker>
+              </mat-form-field>
+            </div>
+
+            <div class="form-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Store</mat-label>
+                <mat-select formControlName="store_id">
+                  <mat-option value="">Not Assigned</mat-option>
+                  <mat-option *ngFor="let store of stores" [value]="store._id">{{ store.name }}</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" *ngIf="isAdmin">
+                <mat-label>Role</mat-label>
+                <mat-select formControlName="role_id">
+                  <mat-option value="">Select Role</mat-option>
+                  <mat-option *ngFor="let role of roles" [value]="role._id">{{ role.name }}</mat-option>
+                </mat-select>
+              </mat-form-field>
+            </div>
+
+            <div class="form-row">
+              <mat-checkbox formControlName="is_active">Active Account</mat-checkbox>
+            </div>
+          </div>
+
+          <mat-divider></mat-divider>
+
+          <div class="form-section">
+            <h3>Contact Information</h3>
+
+            <div class="form-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Address</mat-label>
+                <input matInput formControlName="address" placeholder="123 Main St">
+              </mat-form-field>
+            </div>
+
+            <div class="form-row">
+              <mat-form-field appearance="outline">
+                <mat-label>City</mat-label>
+                <input matInput formControlName="city" placeholder="City">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>State</mat-label>
+                <input matInput formControlName="state" placeholder="State">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Zip Code</mat-label>
+                <input matInput formControlName="zip_code" placeholder="00000">
+              </mat-form-field>
+            </div>
+          </div>
+
+          <mat-divider></mat-divider>
+
+          <div class="form-section">
+            <h3>Emergency Contact</h3>
+
+            <div class="form-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Contact Name</mat-label>
+                <input matInput formControlName="emergency_contact_name" placeholder="Jane Doe">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Contact Phone</mat-label>
+                <input matInput formControlName="emergency_contact_phone" placeholder="555-123-4567">
+              </mat-form-field>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button mat-button type="button" (click)="onCancel()">Cancel</button>
+            <button mat-raised-button color="primary" type="submit" [disabled]="submitInProgress">
+              <mat-spinner diameter="20" *ngIf="submitInProgress"></mat-spinner>
+              <ng-container *ngIf="!submitInProgress">
+                <span *ngIf="isEditMode">Update</span>
+                <span *ngIf="!isEditMode">Create</span>
+              </ng-container>
+            </button>
+          </div>
+        </form>
+      </mat-card-content>
+    </mat-card>
+  </div>
+</div>

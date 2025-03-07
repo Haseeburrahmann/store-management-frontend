@@ -181,13 +181,32 @@ export class StoreDetailComponent implements OnInit, OnDestroy {
           
           // Update the manager object if it exists
           if (!this.store.manager) {
+            // Create a complete User object with all required properties
             this.store.manager = { 
               _id: selectedManager._id,
-              full_name: selectedManager.full_name
+              email: selectedManager.email,
+              full_name: selectedManager.full_name,
+              is_active: selectedManager.is_active || true,
+              created_at: selectedManager.created_at || new Date().toISOString(),
+              updated_at: selectedManager.updated_at || new Date().toISOString(),
+              role_id: selectedManager.role_id
             };
           } else {
+            // If manager object already exists, just update the necessary fields
             this.store.manager._id = selectedManager._id;
             this.store.manager.full_name = selectedManager.full_name;
+            this.store.manager.email = selectedManager.email;
+            
+            // Make sure the other required fields have values
+            if (!this.store.manager.is_active) {
+              this.store.manager.is_active = selectedManager.is_active || true;
+            }
+            if (!this.store.manager.created_at) {
+              this.store.manager.created_at = selectedManager.created_at || new Date().toISOString();
+            }
+            if (!this.store.manager.updated_at) {
+              this.store.manager.updated_at = selectedManager.updated_at || new Date().toISOString();
+            }
           }
           
           this.snackBar.open('Manager assigned successfully', 'Close', { duration: 3000 });

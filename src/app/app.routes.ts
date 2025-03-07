@@ -1,8 +1,9 @@
-// app.routes.ts
+// app.routes.ts (updated)
 import { Routes } from '@angular/router';
 import { AuthGuard } from './core/auth/guards/auth.guard';
 import { STORE_ROUTES } from './features/store-management/store-management.routes';
 import { employeeRoutes } from './features/employee-management/employee-management.routes';
+import { HOURS_TRACKING_ROUTES } from './features/hours-tracking/hours-tracking.routes';
 
 export const routes: Routes = [
   {
@@ -76,37 +77,8 @@ export const routes: Routes = [
     path: 'employees',
     children: employeeRoutes
   },
-  // Hours Tracking routes (commented until standardized)
-  // {
-  //   path: 'hours',
-  //   loadComponent: () => import('./features/hours-tracking/hours-list/hours-list.component').then(m => m.HoursListComponent),
-  //   canActivate: [AuthGuard],
-  //   data: { permission: 'hours:read' }
-  // },
-  // {
-  //   path: 'hours/clock',
-  //   loadComponent: () => import('./features/hours-tracking/clock-in-out/clock-in-out.component').then(m => m.ClockInOutComponent),
-  //   canActivate: [AuthGuard],
-  //   data: { permission: 'hours:write' }
-  // },
-  // {
-  //   path: 'hours/approval',
-  //   loadComponent: () => import('./features/hours-tracking/hours-approval/hours-approval.component').then(m => m.HoursApprovalComponent),
-  //   canActivate: [AuthGuard],
-  //   data: { permission: 'hours:approve' }
-  // },
-  // {
-  //   path: 'hours/timesheet/:employeeId',
-  //   loadComponent: () => import('./features/hours-tracking/timesheet/timesheet.component').then(m => m.TimesheetComponent),
-  //   canActivate: [AuthGuard],
-  //   data: { permission: 'hours:read' }
-  // },
-  // {
-  //   path: 'hours/:id',
-  //   loadComponent: () => import('./features/hours-tracking/hours-detail/hours-detail.component').then(m => m.HoursDetailComponent),
-  //   canActivate: [AuthGuard],
-  //   data: { permission: 'hours:read' }
-  // },
+  // Hours Tracking routes (now using imported routes with standardized permissions)
+  ...HOURS_TRACKING_ROUTES,
   {
     path: '**',
     redirectTo: 'dashboard'
