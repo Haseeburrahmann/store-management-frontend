@@ -6,13 +6,23 @@ import { catchError } from 'rxjs/operators';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { TokenService } from '../services/token.service';
+import { createAppError, ErrorType } from '../utils/error-handler';
 
+/**
+ * HTTP interceptor to add authentication token to requests
+ * and handle authentication errors
+ * 
+ * @param req The original request
+ * @param next The next handler
+ * @returns An observable of the HTTP event
+ */
 export function authInterceptor(req: HttpRequest<any>, next: HttpHandlerFn): Observable<HttpEvent<any>> {
-  const tokenService = inject(TokenService);  // Use TokenService instead of AuthService
+  const tokenService = inject(TokenService);
   const router = inject(Router);
 
   const token = tokenService.getToken();
 
+  // Add authorization header if token exists
   if (token) {
     req = req.clone({
       setHeaders: {
@@ -23,47 +33,24 @@ export function authInterceptor(req: HttpRequest<any>, next: HttpHandlerFn): Obs
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
+      // Handle authentication errors (401)
       if (error.status === 401) {
-        console.log('Authentication error - redirecting to login');
-        tokenService.removeToken();  // Just remove the token here
-        router.navigate(['/login']);
+        console.log('Authentication token expired - redirecting to login');
+        tokenService.removeToken();
+        
+        // Navigate to login and preserve the attempted URL for redirect after login
+        const returnUrl = router.url !== '/login' ? router.url : '';
+        router.navigate(['/login'], returnUrl ? { queryParams: { returnUrl } } : {});
+        
+        // Create a standardized authentication error
+        return throwError(() => createAppError({
+          type: ErrorType.AUTHENTICATION,
+          message: 'Your session has expired. Please log in again.'
+        }));
       }
 
-      let errorMessage = 'An error occurred';
-
-      if (error.error instanceof ErrorEvent) {
-        errorMessage = `Error: ${error.error.message}`;
-      } else {
-        if (error.error && error.error.detail) {
-          errorMessage = error.error.detail;
-        } else if (error.error && typeof error.error === 'string') {
-          errorMessage = error.error;
-        }  
-        else if (error.error && typeof error.error === 'object') {
-          // Try to extract a meaningful message
-          errorMessage = JSON.stringify(error.error);
-        }
-        else if (error.status) {
-          switch (error.status) {
-            case 400:
-              errorMessage = 'Bad request';
-              break;
-            case 403:
-              errorMessage = 'Forbidden - You do not have permission to access this resource';
-              break;
-            case 404:
-              errorMessage = 'Resource not found';
-              break;
-            case 500:
-              errorMessage = 'Server error - Please try again later';
-              break;
-            default:
-              errorMessage = `Error ${error.status}: ${error.statusText || 'Unknown error'}`;
-          }
-        }
-      }
-
-      return throwError(() => new Error(errorMessage));
+      // For other errors, pass them along to be handled by the services
+      return throwError(() => error);
     })
   );
 }

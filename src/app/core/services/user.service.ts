@@ -1,111 +1,380 @@
 // src/app/core/services/user.service.ts
 
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
-import { User, UserCreate, UserUpdate, UserResponse } from '../auth/models/user.model';
-import { ApiService } from './api.service';
+import { Observable, throwError, of } from 'rxjs';
+import { catchError, map, shareReplay, tap } from 'rxjs/operators';
+import { HttpContext } from '@angular/common/http';
 
+import { ApiService } from './api.service';
+import { CacheService } from './cache.service';
+import { ErrorService } from './error.service';
+import { ApiConfig } from '../config/api-config';
+import { CacheConfig } from '../config/cache-config';
+import { CACHE_TAGS, CACHE_TTL } from '../interceptors/cache.interceptor';
+import { createAppError, ErrorType } from '../utils/error-handler';
+
+export interface User {
+  id: string;
+  email: string;
+  full_name: string;
+  phone_number?: string;
+  role_id?: string;
+  role?: {
+    id: string;
+    name: string;
+    permissions?: string[];
+  };
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserCreate {
+  email: string;
+  password: string;
+  full_name: string;
+  phone_number?: string;
+  role_id?: string;
+  is_active?: boolean;
+}
+
+export interface UserUpdate {
+  full_name?: string;
+  phone_number?: string;
+  email?: string;
+  role_id?: string;
+  is_active?: boolean;
+}
+
+export interface UserQueryParams {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  role_id?: string;
+  is_active?: boolean;
+  sort_by?: string;
+  sort_dir?: 'asc' | 'desc';
+}
+
+export interface UserList {
+  data: User[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  
+  // Added methods to make UserList compatible with User[]
+  filter?: (predicate: (value: User, index: number, array: User[]) => unknown) => User[];
+  length?: number;
+}
+
+/**
+ * Enhanced User Service with caching and error handling
+ */
 @Injectable({
   providedIn: 'root'
 })
 export class UserService {
-  private endpoint = '/users';
+  private readonly baseUrl = ApiConfig.endpoints.users.base;
+  private readonly cacheKey = CacheConfig.keys.user;
+  private readonly cacheTags = [CacheConfig.tags.users];
+  private readonly cacheTTL = CacheConfig.ttl.user;
 
-  constructor(private apiService: ApiService) { }
+  constructor(
+    private apiService: ApiService,
+    private cacheService: CacheService,
+    private errorService: ErrorService
+  ) {}
 
   /**
-   * Get a paginated list of users
-   * @param skip Number of items to skip
-   * @param limit Maximum number of items to return
-   * @param search Optional search term
-   * @returns Observable of User array
+   * Gets a list of users with pagination and filtering
+   * 
+   * @param params Query parameters
+   * @returns Observable of user list
    */
-  getUsers(skip: number = 0, limit: number = 10, search?: string): Observable<User[]> {
-    const params = this.apiService.buildParams({
-      skip,
-      limit,
-      search
-    });
-    
-    return this.apiService.get<User[]>(this.endpoint, params);
+  getUsers(params: UserQueryParams = {}): Observable<UserList> {
+    const queryParams: Record<string, any> = {
+      page: params.page?.toString() || '1',
+      page_size: params.pageSize?.toString() || '10'
+    };
+
+    // Add optional parameters if provided
+    if (params.search) queryParams['search'] = params.search;
+    if (params.role_id) queryParams['role_id'] = params.role_id;
+    if (params.is_active !== undefined) queryParams['is_active'] = params.is_active.toString();
+    if (params.sort_by) queryParams['sort_by'] = params.sort_by;
+    if (params.sort_dir) queryParams['sort_dir'] = params.sort_dir;
+
+    // Create cache context with appropriate tags and TTL
+    const context = new HttpContext()
+      .set(CACHE_TAGS, this.cacheTags)
+      .set(CACHE_TTL, this.cacheTTL);
+
+    return this.apiService.get<UserList>(this.baseUrl, {
+      params: queryParams,
+      context
+    }).pipe(
+      map(response => {
+        // Assuming the API returns a structure with data and pagination
+        const result: UserList = {
+          data: Array.isArray(response) ? response : (response as any).data || [],
+          total: (response as any).meta?.pagination?.total || 
+                 (Array.isArray(response) ? response.length : (response as any).data?.length || 0),
+          page: parseInt(queryParams['page'], 10),
+          pageSize: parseInt(queryParams['page_size'], 10),
+          totalPages: (response as any).meta?.pagination?.totalPages || 
+                      Math.ceil(((response as any).meta?.pagination?.total || 
+                      (Array.isArray(response) ? response.length : (response as any).data?.length || 0)) / 
+                      parseInt(queryParams['page_size'], 10))
+        };
+        
+        // Add array-like methods to make UserList compatible with User[]
+        const data = result.data;
+        result.length = data.length;
+        result.filter = (predicate) => data.filter(predicate);
+        
+        return result;
+      }),
+      catchError(error => {
+        this.errorService.logError(error, { 
+          context: 'UserService.getUsers', 
+          params 
+        });
+        return throwError(() => error);
+      }),
+      shareReplay(1)
+    );
   }
 
   /**
-   * Get a specific user by ID
+   * Gets a user by ID
+   * 
    * @param id User ID
-   * @returns Observable of User
+   * @returns Observable of user
    */
   getUser(id: string): Observable<User> {
-    return this.apiService.get<UserResponse>(`${this.endpoint}/${id}`).pipe(
-      map(response => this.formatUserResponse(response))
+    const url = ApiConfig.endpoints.users.detail(id);
+    const cacheKey = `${this.cacheKey}_${id}`;
+    
+    // Check cache first
+    const cachedUser = this.cacheService.get<User>(cacheKey);
+    if (cachedUser) {
+      return of(cachedUser);
+    }
+
+    // Create cache context with appropriate tags and TTL
+    const context = new HttpContext()
+      .set(CACHE_TAGS, this.cacheTags)
+      .set(CACHE_TTL, this.cacheTTL);
+
+    return this.apiService.get<User>(url, { context }).pipe(
+      tap(user => {
+        // Cache the result
+        this.cacheService.set(
+          { key: cacheKey, ttl: this.cacheTTL, tag: this.cacheTags },
+          user
+        );
+      }),
+      catchError(error => {
+        this.errorService.logError(error, { 
+          context: 'UserService.getUser', 
+          userId: id 
+        });
+        
+        if (error.type === ErrorType.NOT_FOUND) {
+          return throwError(() => createAppError({
+            type: ErrorType.NOT_FOUND,
+            message: `User with ID ${id} not found.`
+          }));
+        }
+        
+        return throwError(() => error);
+      }),
+      shareReplay(1)
     );
   }
 
   /**
-   * Create a new user
-   * @param userData User data
-   * @returns Observable of created User
+   * Creates a new user
+   * 
+   * @param user User data
+   * @returns Observable of created user
    */
-  createUser(userData: UserCreate): Observable<User> {
-    return this.apiService.post<UserResponse>(this.endpoint, userData).pipe(
-      map(response => this.formatUserResponse(response))
+  createUser(user: UserCreate): Observable<User> {
+    return this.apiService.post<User>(this.baseUrl, user).pipe(
+      tap(_ => {
+        // Invalidate cache
+        this.cacheService.invalidateByTag(CacheConfig.tags.users);
+      }),
+      catchError(error => {
+        this.errorService.logError(error, { 
+          context: 'UserService.createUser',
+          userData: { ...user, password: '[REDACTED]' }
+        });
+        
+        // Handle specific validation errors
+        if (error.type === ErrorType.VALIDATION) {
+          return throwError(() => error);
+        }
+        
+        return throwError(() => error);
+      })
     );
   }
 
   /**
-   * Update an existing user
+   * Updates a user
+   * 
    * @param id User ID
-   * @param userData User update data
-   * @returns Observable of updated User
+   * @param user User data
+   * @returns Observable of updated user
    */
-  updateUser(id: string, userData: UserUpdate): Observable<User> {
-    return this.apiService.put<UserResponse>(`${this.endpoint}/${id}`, userData).pipe(
-      map(response => this.formatUserResponse(response))
+  updateUser(id: string, user: UserUpdate): Observable<User> {
+    const url = ApiConfig.endpoints.users.detail(id);
+    const cacheKey = `${this.cacheKey}_${id}`;
+
+    return this.apiService.put<User>(url, user).pipe(
+      tap(updatedUser => {
+        // Update cache
+        this.cacheService.set(
+          { key: cacheKey, ttl: this.cacheTTL, tag: this.cacheTags },
+          updatedUser
+        );
+        
+        // Invalidate related caches
+        this.cacheService.invalidateByTag(CacheConfig.tags.users);
+      }),
+      catchError(error => {
+        this.errorService.logError(error, { 
+          context: 'UserService.updateUser',
+          userId: id,
+          userData: user
+        });
+        
+        if (error.type === ErrorType.NOT_FOUND) {
+          return throwError(() => createAppError({
+            type: ErrorType.NOT_FOUND,
+            message: `User with ID ${id} not found.`
+          }));
+        }
+        
+        return throwError(() => error);
+      })
     );
   }
 
   /**
-   * Delete a user
+   * Deletes a user
+   * 
    * @param id User ID
-   * @returns Observable of void
+   * @returns Observable of operation success
    */
   deleteUser(id: string): Observable<void> {
-    return this.apiService.delete<void>(`${this.endpoint}/${id}`);
+    const url = ApiConfig.endpoints.users.detail(id);
+    const cacheKey = `${this.cacheKey}_${id}`;
+
+    return this.apiService.delete<void>(url).pipe(
+      tap(_ => {
+        // Remove from cache
+        this.cacheService.remove(cacheKey);
+        
+        // Invalidate related caches
+        this.cacheService.invalidateByTag(CacheConfig.tags.users);
+      }),
+      catchError(error => {
+        this.errorService.logError(error, { 
+          context: 'UserService.deleteUser',
+          userId: id
+        });
+        
+        if (error.type === ErrorType.NOT_FOUND) {
+          return throwError(() => createAppError({
+            type: ErrorType.NOT_FOUND,
+            message: `User with ID ${id} not found.`
+          }));
+        }
+        
+        return throwError(() => error);
+      })
+    );
   }
 
   /**
-   * Get the current authenticated user
-   * @returns Observable of User
+   * Gets the current user's profile
+   * 
+   * @returns Observable of the current user
    */
   getCurrentUser(): Observable<User> {
-    return this.apiService.get<UserResponse>(`${this.endpoint}/me`).pipe(
-      map(response => this.formatUserResponse(response))
+    const url = ApiConfig.endpoints.users.profile;
+    const cacheKey = `${this.cacheKey}_current`;
+    
+    // Check cache first
+    const cachedUser = this.cacheService.get<User>(cacheKey);
+    if (cachedUser) {
+      return of(cachedUser);
+    }
+
+    return this.apiService.get<User>(url).pipe(
+      tap(user => {
+        // Cache the result
+        this.cacheService.set(
+          { key: cacheKey, ttl: this.cacheTTL, tag: this.cacheTags },
+          user
+        );
+      }),
+      catchError(error => {
+        this.errorService.logError(error, { 
+          context: 'UserService.getCurrentUser'
+        });
+        return throwError(() => error);
+      }),
+      shareReplay(1)
     );
   }
 
   /**
-   * Update the current authenticated user
-   * @param userData User update data
-   * @returns Observable of updated User
+   * Updates the current user's profile
+   * 
+   * @param user User update data
+   * @returns Observable of updated user
    */
-  updateCurrentUser(userData: UserUpdate): Observable<User> {
-    return this.apiService.put<UserResponse>(`${this.endpoint}/me`, userData).pipe(
-      map(response => this.formatUserResponse(response))
+  updateCurrentUser(user: UserUpdate): Observable<User> {
+    const url = ApiConfig.endpoints.users.profile;
+    const cacheKey = `${this.cacheKey}_current`;
+
+    return this.apiService.put<User>(url, user).pipe(
+      tap(updatedUser => {
+        // Update cache
+        this.cacheService.set(
+          { key: cacheKey, ttl: this.cacheTTL, tag: this.cacheTags },
+          updatedUser
+        );
+      }),
+      catchError(error => {
+        this.errorService.logError(error, { 
+          context: 'UserService.updateCurrentUser',
+          userData: user
+        });
+        return throwError(() => error);
+      })
     );
   }
 
   /**
-   * Format the user response to ensure consistent structure
-   * @param user User response from API
-   * @returns Formatted User object
+   * Activates or deactivates a user
+   * 
+   * @param id User ID
+   * @param active Whether to activate or deactivate
+   * @returns Observable of updated user
    */
-  private formatUserResponse(user: UserResponse): User {
-    // Ensure all IDs are strings
-    return {
-      ...user,
-      _id: user._id.toString(),
-      role_id: user.role_id ? user.role_id.toString() : undefined
-    };
+  setUserActive(id: string, active: boolean): Observable<User> {
+    return this.updateUser(id, { is_active: active });
+  }
+
+  /**
+   * Clears the user cache
+   */
+  clearCache(): void {
+    this.cacheService.invalidateByTag(CacheConfig.tags.users);
   }
 }

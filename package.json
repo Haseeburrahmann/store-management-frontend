@@ -23,6 +23,7 @@
     "@auth0/angular-jwt": "^5.1.2",
     "@ngrx/effects": "^17.1.0",
     "@ngrx/store": "^17.1.0",
+    "chart.js": "^4.4.8",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "zone.js": "~0.14.3"
