@@ -1,8 +1,8 @@
 // src/app/core/services/hours.service.ts
 
 import { Injectable } from '@angular/core';
-import { Observable, throwError } from 'rxjs';
-import { map, catchError } from 'rxjs/operators';
+import { forkJoin, Observable, of, throwError } from 'rxjs';
+import { map, catchError, switchMap } from 'rxjs/operators';
 import { 
   Hours, 
   HoursCreate, 
@@ -17,6 +17,8 @@ import {
 import { ApiService } from './api.service';
 import { Store } from '../../shared/models/store.model';
 import { Employee } from '../../shared/models/employee.model';
+import { EmployeeService } from './employee.service';
+import { StoreService } from './store.service';
 
 @Injectable({
   providedIn: 'root'
@@ -24,7 +26,11 @@ import { Employee } from '../../shared/models/employee.model';
 export class HoursService {
   private endpoint = '/hours';
 
-  constructor(private apiService: ApiService) { }
+  constructor(
+    private apiService: ApiService,
+    private employeeService : EmployeeService,
+    private storeService : StoreService
+  ) { }
 
   /**
    * Format date for API in ISO format
@@ -92,6 +98,114 @@ export class HoursService {
       map(response => this.formatHoursResponse(response)),
       catchError(error => {
         console.error(`Error fetching hours with ID ${id}:`, error);
+        return throwError(() => error);
+      })
+    );
+  }
+
+  getAllHours(
+    skip: number = 0,
+    limit: number = 100,
+    employee_id?: string,
+    store_id?: string,
+    status?: string,
+    start_date?: string,
+    end_date?: string
+  ): Observable<Hours[]> {
+    // Build query parameters
+    const params = this.apiService.buildParams({
+      skip,
+      limit,
+      employee_id,
+      store_id,
+      status,
+      start_date,
+      end_date
+    });
+    
+    console.log('Getting hours with params:', params);
+    
+    return this.apiService.get<HoursResponse[]>(`${this.endpoint}`, params).pipe(
+      switchMap(hoursList => {
+        // If we have hours, let's fetch the related data
+        if (hoursList && hoursList.length > 0) {
+          // Extract unique employee IDs and store IDs
+          const employeeIds = [...new Set(hoursList.map(h => h.employee_id).filter(id => id))];
+          const storeIds = [...new Set(hoursList.map(h => h.store_id).filter(id => id))];
+          
+          // Create observables for each required API call
+          const requests: Observable<any>[] = [];
+          
+          // Only add these requests if we have IDs to fetch
+          if (employeeIds.length > 0) {
+            const employeeRequests = employeeIds.map(id => 
+              this.employeeService.getEmployeeById(id.toString()).pipe(
+                catchError(err => {
+                  console.error(`Error fetching employee ${id}:`, err);
+                  return of(null);
+                })
+              )
+            );
+            requests.push(...employeeRequests);
+          }
+          
+          if (storeIds.length > 0) {
+            const storeRequests = storeIds.map(id => 
+              this.storeService.getStore(id.toString()).pipe(
+                catchError(err => {
+                  console.error(`Error fetching store ${id}:`, err);
+                  return of(null);
+                })
+              )
+            );
+            requests.push(...storeRequests);
+          }
+          
+          // If we have any requests to make
+          if (requests.length > 0) {
+            return forkJoin(requests).pipe(
+              map(results => {
+                // Process results and update hour records
+                const employees: { [id: string]: Employee } = {};
+                const stores: { [id: string]: Store } = {};
+                
+                // Group results by type
+                results.forEach(result => {
+                  if (result) {
+                    if (employeeIds.includes(result._id)) {
+                      employees[result._id] = result;
+                    } else if (storeIds.includes(result._id)) {
+                      stores[result._id] = result;
+                    }
+                  }
+                });
+                
+                // Enhance each hour with employee and store data
+                return hoursList.map(hour => {
+                  const formattedHour = this.formatHoursResponse(hour);
+                  
+                  // Add employee data if available
+                  if (hour.employee_id && employees[hour.employee_id]) {
+                    formattedHour.employee = employees[hour.employee_id];
+                  }
+                  
+                  // Add store data if available
+                  if (hour.store_id && stores[hour.store_id]) {
+                    formattedHour.store = stores[hour.store_id];
+                  }
+                  
+                  return formattedHour;
+                });
+              })
+            );
+          }
+        }
+        
+        // Just format hours if no additional data needed
+        return of(hoursList.map(hour => this.formatHoursResponse(hour)));
+      }),
+      catchError(error => {
+        console.error('Error getting hours:', error);
         return throwError(() => error);
       })
     );
@@ -234,11 +348,18 @@ export class HoursService {
    * @returns Observable of Hours array
    */
   getPendingApprovals(): Observable<Hours[]> {
-    return this.apiService.get<HoursResponse[]>(`${this.endpoint}/approvals/pending`).pipe(
-      map(hours => hours.map(hour => this.formatHoursResponse(hour))),
+    // Use the main endpoint with a status filter instead of a special endpoint
+    return this.getAllHours(
+      0,     // skip
+      100,   // limit
+      undefined, // employee_id
+      undefined, // store_id
+      'pending'  // status
+    ).pipe(
       catchError(error => {
         console.error('Error fetching pending approvals:', error);
-        return throwError(() => error);
+        // Return empty array on error to avoid breaking the UI
+        return of([]);
       })
     );
   }
@@ -354,81 +475,139 @@ export class HoursService {
  * @param hours Hours response from API
  * @returns Formatted Hours object
  */
+// In HoursService class
+
 private formatHoursResponse(hours: HoursResponse): Hours {
-  // Create a properly typed employee object if it exists
-  let formattedEmployee: Employee | undefined = undefined;
-  
-  if (hours.employee) {
-    formattedEmployee = {
-      _id: hours.employee._id?.toString() || '',
-      user_id: hours.employee.user_id?.toString() || '',
-      email: hours.employee.email || '',
-      full_name: hours.employee.full_name || '',
-      position: hours.employee.position || '',
-      employment_status: hours.employee.employment_status || 'active',
-      hourly_rate: hours.employee.hourly_rate || 0,
-      is_active: hours.employee.is_active ?? true,
-      hire_date: typeof hours.employee.hire_date === 'string' ? 
-        hours.employee.hire_date : new Date().toISOString(),
-      store_id: hours.employee.store_id?.toString(),
-      created_at: typeof hours.employee.created_at === 'string' ? 
-        hours.employee.created_at : new Date().toISOString(),
-      updated_at: typeof hours.employee.updated_at === 'string' ? 
-        hours.employee.updated_at : new Date().toISOString()
+  try {
+    // Create a properly typed employee object if it exists
+    let formattedEmployee: Employee | undefined = undefined;
+    
+    if (hours.employee) {
+      formattedEmployee = {
+        _id: hours.employee._id?.toString() || '',
+        user_id: hours.employee.user_id?.toString() || '',
+        email: hours.employee.email || '',
+        full_name: hours.employee.full_name || '',
+        position: hours.employee.position || '',
+        employment_status: hours.employee.employment_status || 'active',
+        hourly_rate: hours.employee.hourly_rate || 0,
+        is_active: hours.employee.is_active ?? true,
+        hire_date: this.safeFormatDate(hours.employee.hire_date),
+        store_id: hours.employee.store_id?.toString(),
+        created_at: this.safeFormatDate(hours.employee.created_at),
+        updated_at: this.safeFormatDate(hours.employee.updated_at)
+      };
+    } else if (hours.employee_id) {
+      // If we only have an employee ID, we'll create a minimal employee object
+      // This should be populated later in the component with the real data
+      formattedEmployee = {
+        _id: hours.employee_id.toString(),
+        user_id: '',
+        email: '',
+        full_name: 'Employee #' + hours.employee_id.toString(),
+        position: '',
+        employment_status: 'active',
+        hourly_rate: 0,
+        is_active: true,
+        hire_date: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+    }
+    
+    // Similar handling for store
+    let formattedStore: Store | undefined = undefined;
+    
+    if (hours.store) {
+      formattedStore = {
+        _id: hours.store._id?.toString() || '',
+        name: hours.store.name || '',
+        address: hours.store.address || '',
+        city: hours.store.city || '',
+        state: hours.store.state || '',
+        zip_code: hours.store.zip_code || '',
+        phone: hours.store.phone || '',
+        is_active: hours.store.is_active ?? true,
+        created_at: this.safeFormatDate(hours.store.created_at),
+        updated_at: this.safeFormatDate(hours.store.updated_at)
+      };
+    } else if (hours.store_id) {
+      // If we only have a store ID, we'll create a minimal store object
+      formattedStore = {
+        _id: hours.store_id.toString(),
+        name: 'Store #' + hours.store_id.toString(),
+        address: '',
+        city: '',
+        state: '',
+        zip_code: '',
+        phone: '',
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+    }
+    
+    return {
+      ...hours,
+      _id: hours._id ? hours._id.toString() : '',
+      employee_id: hours.employee_id ? hours.employee_id.toString() : '',
+      store_id: hours.store_id ? hours.store_id.toString() : '',
+      approved_by: hours.approved_by ? hours.approved_by.toString() : undefined,
+      // Use the properly formatted objects
+      employee: formattedEmployee,
+      store: formattedStore,
+      // Set date field
+      date: hours.date ? this.safeFormatDate(hours.date) : new Date().toISOString(),
+      // Keep dates as strings for consistency
+      clock_in: this.safeFormatDate(hours.clock_in),
+      clock_out: hours.clock_out ? this.safeFormatDate(hours.clock_out) : undefined,
+      break_start: hours.break_start ? this.safeFormatDate(hours.break_start) : undefined,
+      break_end: hours.break_end ? this.safeFormatDate(hours.break_end) : undefined,
+      approved_at: hours.approved_at ? this.safeFormatDate(hours.approved_at) : undefined,
+      created_at: this.safeFormatDate(hours.created_at),
+      updated_at: this.safeFormatDate(hours.updated_at)
+    };
+  } catch (error) {
+    console.error('Error formatting hours response:', error, hours);
+    // Return a minimal valid Hours object to avoid crashing
+    return {
+      _id: hours._id ? hours._id.toString() : 'error-id',
+      employee_id: hours.employee_id ? hours.employee_id.toString() : '',
+      store_id: hours.store_id ? hours.store_id.toString() : '',
+      date: new Date().toISOString(),
+      clock_in: new Date().toISOString(),
+      status: HoursStatus.PENDING,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
   }
+}
+
+// Add this helper method to safely format dates
+private safeFormatDate(date: any): string {
+  if (!date) return new Date().toISOString();
   
-  // Create a properly typed store object if it exists
-  let formattedStore: Store | undefined = undefined;
-  
-  if (hours.store) {
-    formattedStore = {
-      _id: hours.store._id?.toString() || '',
-      name: hours.store.name || '',
-      address: hours.store.address || '',
-      city: hours.store.city || '',
-      state: hours.store.state || '',
-      zip_code: hours.store.zip_code || '',
-      phone: hours.store.phone || '',
-      is_active: hours.store.is_active ?? true,
-      created_at: typeof hours.store.created_at === 'string' ? 
-        hours.store.created_at : new Date().toISOString(),
-      updated_at: typeof hours.store.updated_at === 'string' ? 
-        hours.store.updated_at : new Date().toISOString()
-    };
+  try {
+    // Handle string dates
+    if (typeof date === 'string') {
+      return new Date(date).toISOString();
+    }
+    
+    // Handle Date objects
+    if (date instanceof Date) {
+      return date.toISOString();
+    }
+    
+    // Handle MongoDB date format with $date field
+    if (typeof date === 'object' && date.$date) {
+      return new Date(date.$date).toISOString();
+    }
+    
+    // Fall back to current date if we can't parse
+    return new Date().toISOString();
+  } catch (error) {
+    console.warn('Error formatting date:', date, error);
+    return new Date().toISOString();
   }
-  
-  return {
-    ...hours,
-    _id: hours._id ? hours._id.toString() : '',
-    employee_id: hours.employee_id ? hours.employee_id.toString() : '',
-    store_id: hours.store_id ? hours.store_id.toString() : '',
-    approved_by: hours.approved_by ? hours.approved_by.toString() : undefined,
-    // Use the properly formatted objects
-    employee: formattedEmployee,
-    store: formattedStore,
-    // Set date field
-    date: typeof hours.date === 'string' ? hours.date : new Date(hours.date).toISOString(),
-    // Keep dates as strings for consistency
-    clock_in: typeof hours.clock_in === 'string' ? hours.clock_in : new Date(hours.clock_in).toISOString(),
-    clock_out: hours.clock_out ? 
-      (typeof hours.clock_out === 'string' ? hours.clock_out : new Date(hours.clock_out).toISOString()) : 
-      undefined,
-    break_start: hours.break_start ?
-      (typeof hours.break_start === 'string' ? hours.break_start : new Date(hours.break_start).toISOString()) :
-      undefined,
-    break_end: hours.break_end ?
-      (typeof hours.break_end === 'string' ? hours.break_end : new Date(hours.break_end).toISOString()) :
-      undefined,
-    approved_at: hours.approved_at ?
-      (typeof hours.approved_at === 'string' ? hours.approved_at : new Date(hours.approved_at).toISOString()) :
-      undefined,
-    created_at: typeof hours.created_at === 'string' ? 
-      hours.created_at : 
-      new Date(hours.created_at).toISOString(),
-    updated_at: typeof hours.updated_at === 'string' ? 
-      hours.updated_at : 
-      new Date(hours.updated_at).toISOString()
-  };
 }
 }

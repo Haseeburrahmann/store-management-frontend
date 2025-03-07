@@ -3,7 +3,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, BehaviorSubject, throwError, of } from 'rxjs';
-import { catchError, tap, switchMap } from 'rxjs/operators';
+import { catchError, tap, switchMap, map } from 'rxjs/operators';
 import { Router } from '@angular/router';
 import { User, UserCreate, UserWithPermissions } from '../auth/models/user.model';
 import { environment } from '../../../environments/environment';
@@ -32,7 +32,7 @@ export class AuthService {
     this.loadUser();
   }
 
-  login(email: string, password: string): Observable<AuthResponse> {
+  login(email: string, password: string): Observable<UserWithPermissions> {
     const formData = new FormData();
     formData.append('username', email);
     formData.append('password', password);
@@ -40,17 +40,16 @@ export class AuthService {
     return this.apiService.post<AuthResponse>(`${this.apiUrl}/login`, formData)
       .pipe(
         tap(response => {
-          // Use TokenService instead of localStorage
           this.tokenService.setToken(response.access_token);
-          this.loadUserProfile();
         }),
+        switchMap(() => this.loadUserProfile()),
         catchError(error => {
           console.error('Login error:', error);
           return throwError(() => new Error(error.message || 'Login failed. Please check your credentials.'));
         })
       );
   }
-
+  
   register(userData: UserCreate): Observable<User> {
     return this.apiService.post<User>(`${this.apiUrl}/register`, userData);
   }

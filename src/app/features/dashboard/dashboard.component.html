@@ -1,373 +1,547 @@
 <!-- src/app/features/dashboard/dashboard.component.html -->
 <div class="dashboard-container">
-    <h1 class="dashboard-title">Dashboard</h1>
+  <!-- Admin Dashboard -->
+  <div *ngIf="isAdmin" class="admin-dashboard">
+    <h1 class="dashboard-title">Admin Dashboard</h1>
     
-    <!-- Admin Dashboard -->
-    <div *ngIf="isAdmin" class="admin-dashboard">
-      <!-- Quick Stats Row -->
-      <div class="stats-row">
-        <mat-card class="stats-card">
-          <mat-card-content>
-            <div class="stats-content">
-              <div class="stats-icon">
-                <mat-icon>store</mat-icon>
-              </div>
-              <div class="stats-info">
-                <div class="stats-value">{{ totalStores }}</div>
-                <div class="stats-label">Stores</div>
-              </div>
+    <!-- Quick Stats Row -->
+    <div class="stats-row">
+      <mat-card class="stats-card">
+        <mat-card-content>
+          <div class="stats-content">
+            <div class="stats-icon">
+              <mat-icon>store</mat-icon>
             </div>
-          </mat-card-content>
-          <mat-card-actions>
-            <button mat-button color="primary" (click)="navigateToStores()">View All Stores</button>
-          </mat-card-actions>
-        </mat-card>
-        
-        <mat-card class="stats-card">
-          <mat-card-content>
-            <div class="stats-content">
-              <div class="stats-icon">
-                <mat-icon>people</mat-icon>
-              </div>
-              <div class="stats-info">
-                <div class="stats-value">{{ totalEmployees }}</div>
-                <div class="stats-label">Employees</div>
-              </div>
+            <div class="stats-info">
+              <div class="stats-value">{{ totalStores }}</div>
+              <div class="stats-label">Stores</div>
             </div>
-          </mat-card-content>
-          <mat-card-actions>
-            <button mat-button color="primary" (click)="navigateToEmployees()">View All Employees</button>
-          </mat-card-actions>
-        </mat-card>
-        
-        <mat-card class="stats-card">
-          <mat-card-content>
-            <div class="stats-content">
-              <div class="stats-icon">
-                <mat-icon>schedule</mat-icon>
-              </div>
-              <div class="stats-info">
-                <div class="stats-value">{{ totalPendingHours }}</div>
-                <div class="stats-label">Pending Hours Approvals</div>
-              </div>
-            </div>
-          </mat-card-content>
-          <mat-card-actions>
-            <button mat-button color="primary" (click)="navigateToHoursApproval()">View Pending Approvals</button>
-          </mat-card-actions>
-        </mat-card>
-      </div>
+          </div>
+        </mat-card-content>
+        <mat-card-actions>
+          <button mat-button color="primary" (click)="navigateToStores()">View All Stores</button>
+        </mat-card-actions>
+      </mat-card>
       
-      <!-- Main Content Row -->
-      <div class="content-row">
-        <mat-card class="content-card store-list">
-          <mat-card-header>
-            <mat-card-title>Stores</mat-card-title>
-          </mat-card-header>
-          <mat-card-content>
-            <div *ngIf="isLoadingStores" class="loading-indicator">
-              <mat-spinner diameter="30"></mat-spinner>
-              <span>Loading stores...</span>
+      <mat-card class="stats-card">
+        <mat-card-content>
+          <div class="stats-content">
+            <div class="stats-icon">
+              <mat-icon>people</mat-icon>
             </div>
-            
-            <div *ngIf="storesError" class="error-message">
-              {{ storesError }}
+            <div class="stats-info">
+              <div class="stats-value">{{ totalEmployees }}</div>
+              <div class="stats-label">Employees</div>
             </div>
-            
-            <div *ngIf="!isLoadingStores && !storesError && stores.length === 0" class="empty-message">
-              No stores found.
+          </div>
+        </mat-card-content>
+        <mat-card-actions>
+          <button mat-button color="primary" (click)="navigateToEmployees()">View All Employees</button>
+        </mat-card-actions>
+      </mat-card>
+      
+      <mat-card class="stats-card">
+        <mat-card-content>
+          <div class="stats-content">
+            <div class="stats-icon">
+              <mat-icon>schedule</mat-icon>
             </div>
-            
-            <div *ngIf="!isLoadingStores && !storesError && stores.length > 0" class="store-list-content">
-              <ng-container *ngFor="let store of stores.slice(0, 5); let i = index">
-                <div class="store-item">
-                  <div class="store-name">{{ store.name }}</div>
-                  <div class="store-address">{{ store.address }}, {{ store.city }}, {{ store.state }}</div>
-                  <div class="store-manager" *ngIf="store.manager">
-                    Manager: {{ store.manager.full_name }}
-                  </div>
-                  <mat-divider *ngIf="i < stores.slice(0, 5).length - 1"></mat-divider>
-                </div>
-              </ng-container>
-              
-              <div *ngIf="stores.length > 5" class="view-more">
-                <button mat-button color="primary" (click)="navigateToStores()">View All Stores</button>
-              </div>
+            <div class="stats-info">
+              <div class="stats-value">{{ totalPendingHours }}</div>
+              <div class="stats-label">Pending Approvals</div>
             </div>
-          </mat-card-content>
-        </mat-card>
-        
-        <mat-card class="content-card employee-list">
-          <mat-card-header>
-            <mat-card-title>Recent Employees</mat-card-title>
-          </mat-card-header>
-          <mat-card-content>
-            <div *ngIf="isLoadingEmployees" class="loading-indicator">
-              <mat-spinner diameter="30"></mat-spinner>
-              <span>Loading employees...</span>
-            </div>
-            
-            <div *ngIf="employeesError" class="error-message">
-              {{ employeesError }}
-            </div>
-            
-            <div *ngIf="!isLoadingEmployees && !employeesError && employees.length === 0" class="empty-message">
-              No employees found.
-            </div>
-            
-            <div *ngIf="!isLoadingEmployees && !employeesError && employees.length > 0" class="employee-list-content">
-              <ng-container *ngFor="let employee of employees.slice(0, 5); let i = index">
-                <div class="employee-item">
-                  <div class="employee-name">{{ employee.full_name }}</div>
-                  <div class="employee-position">{{ employee.position }}</div>
-                  <div class="employee-store" *ngIf="employee.store">
-                    Store: {{ employee.store.name }}
-                  </div>
-                  <mat-divider *ngIf="i < employees.slice(0, 5).length - 1"></mat-divider>
-                </div>
-              </ng-container>
-              
-              <div *ngIf="employees.length > 5" class="view-more">
-                <button mat-button color="primary" (click)="navigateToEmployees()">View All Employees</button>
-              </div>
-            </div>
-          </mat-card-content>
-        </mat-card>
-        
-        <mat-card class="content-card hours-list">
-          <mat-card-header>
-            <mat-card-title>Pending Hours Approvals</mat-card-title>
-          </mat-card-header>
-          <mat-card-content>
-            <div *ngIf="isLoadingHours" class="loading-indicator">
-              <mat-spinner diameter="30"></mat-spinner>
-              <span>Loading hours...</span>
-            </div>
-            
-            <div *ngIf="hoursError" class="error-message">
-              {{ hoursError }}
-            </div>
-            
-            <div *ngIf="!isLoadingHours && !hoursError && pendingHours.length === 0" class="empty-message">
-              No pending hours found.
-            </div>
-            
-            <div *ngIf="!isLoadingHours && !hoursError && pendingHours.length > 0" class="hours-list-content">
-              <ng-container *ngFor="let hour of pendingHours.slice(0, 5); let i = index">
-                <div class="hour-item">
-                  <div class="hour-employee" *ngIf="hour.employee">{{ hour.employee.full_name }}</div>
-                  <div class="hour-date">Date: {{ hour.date | date }}</div>
-                  <div class="hour-details">
-                    <span>Clock In: {{ hour.clock_in | date:'shortTime' }}</span>
-                    <span *ngIf="hour.clock_out">Clock Out: {{ hour.clock_out | date:'shortTime' }}</span>
-                  </div>
-                  <mat-divider *ngIf="i < pendingHours.slice(0, 5).length - 1"></mat-divider>
-                </div>
-              </ng-container>
-              
-              <div *ngIf="pendingHours.length > 5" class="view-more">
-                <button mat-button color="primary" (click)="navigateToHoursApproval()">View All Pending Approvals</button>
-              </div>
-            </div>
-          </mat-card-content>
-        </mat-card>
-      </div>
+          </div>
+        </mat-card-content>
+        <mat-card-actions>
+          <button mat-button color="primary" (click)="navigateToHoursApproval()">View Pending Approvals</button>
+        </mat-card-actions>
+      </mat-card>
     </div>
     
-    <!-- Manager Dashboard -->
-    <div *ngIf="isManager" class="manager-dashboard">
-      <!-- Quick Stats Row -->
-      <div class="stats-row">
-        <mat-card class="stats-card">
-          <mat-card-content>
-            <div class="stats-content">
-              <div class="stats-icon">
-                <mat-icon>store</mat-icon>
-              </div>
-              <div class="stats-info">
-                <div class="stats-value">{{ stores.length }}</div>
-                <div class="stats-label">My Store</div>
-              </div>
-            </div>
-          </mat-card-content>
-          <mat-card-actions *ngIf="stores.length > 0">
-            <button mat-button color="primary" [routerLink]="['/stores', stores[0]._id]">View Store Details</button>
-          </mat-card-actions>
-        </mat-card>
-        
-        <mat-card class="stats-card">
-          <mat-card-content>
-            <div class="stats-content">
-              <div class="stats-icon">
-                <mat-icon>people</mat-icon>
-              </div>
-              <div class="stats-info">
-                <div class="stats-value">{{ totalEmployees }}</div>
-                <div class="stats-label">Team Members</div>
-              </div>
-            </div>
-          </mat-card-content>
-          <mat-card-actions>
-            <button mat-button color="primary" (click)="navigateToEmployees()">View Team</button>
-          </mat-card-actions>
-        </mat-card>
-        
-        <mat-card class="stats-card">
-          <mat-card-content>
-            <div class="stats-content">
-              <div class="stats-icon">
-                <mat-icon>schedule</mat-icon>
-              </div>
-              <div class="stats-info">
-                <div class="stats-value">{{ totalPendingHours }}</div>
-                <div class="stats-label">Pending Approvals</div>
-              </div>
-            </div>
-          </mat-card-content>
-          <mat-card-actions>
-            <button mat-button color="primary" (click)="navigateToHoursApproval()">Review Hours</button>
-          </mat-card-actions>
-        </mat-card>
-      </div>
-      
-      <!-- Main Content Row -->
-      <div class="content-row">
-        <mat-card class="content-card employee-list">
-          <mat-card-header>
-            <mat-card-title>Team Members</mat-card-title>
-          </mat-card-header>
-          <mat-card-content>
-            <div *ngIf="isLoadingEmployees" class="loading-indicator">
-              <mat-spinner diameter="30"></mat-spinner>
-              <span>Loading team members...</span>
-            </div>
-            
-            <div *ngIf="employeesError" class="error-message">
-              {{ employeesError }}
-            </div>
-            
-            <div *ngIf="!isLoadingEmployees && !employeesError && employees.length === 0" class="empty-message">
-              No team members found.
-            </div>
-            
-            <div *ngIf="!isLoadingEmployees && !employeesError && employees.length > 0" class="employee-list-content">
-              <ng-container *ngFor="let employee of employees.slice(0, 5); let i = index">
-                <div class="employee-item">
-                  <div class="employee-name">{{ employee.full_name }}</div>
-                  <div class="employee-position">{{ employee.position }}</div>
-                  <div class="employee-status">
-                    <span [ngClass]="'status-' + employee.employment_status">{{ employee.employment_status | titlecase }}</span>
-                  </div>
-                  <mat-divider *ngIf="i < employees.slice(0, 5).length - 1"></mat-divider>
-                </div>
+    <!-- Main Content Row -->
+    <div class="content-row">
+      <mat-card class="content-card store-overview">
+        <mat-card-header>
+          <mat-card-title>Stores Overview</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div *ngIf="isLoadingStores" class="loading-indicator">
+            <mat-spinner diameter="30"></mat-spinner>
+            <span>Loading stores...</span>
+          </div>
+          
+          <div *ngIf="storesError" class="error-message">
+            {{ storesError }}
+          </div>
+          
+          <div *ngIf="!isLoadingStores && !storesError && stores.length === 0" class="empty-message">
+            No stores found.
+          </div>
+          
+          <div *ngIf="!isLoadingStores && !storesError && stores.length > 0" class="store-list-content">
+            <table mat-table [dataSource]="stores.slice(0, 5)" class="store-table">
+              <ng-container matColumnDef="name">
+                <th mat-header-cell *matHeaderCellDef>Store Name</th>
+                <td mat-cell *matCellDef="let store">{{ store.name }}</td>
               </ng-container>
               
-              <div *ngIf="employees.length > 5" class="view-more">
-                <button mat-button color="primary" (click)="navigateToEmployees()">View All Team Members</button>
-              </div>
-            </div>
-          </mat-card-content>
-        </mat-card>
-        
-        <mat-card class="content-card hours-list">
-          <mat-card-header>
-            <mat-card-title>Pending Hours Approvals</mat-card-title>
-          </mat-card-header>
-          <mat-card-content>
-            <div *ngIf="isLoadingHours" class="loading-indicator">
-              <mat-spinner diameter="30"></mat-spinner>
-              <span>Loading pending hours...</span>
-            </div>
-            
-            <div *ngIf="hoursError" class="error-message">
-              {{ hoursError }}
-            </div>
-            
-            <div *ngIf="!isLoadingHours && !hoursError && pendingHours.length === 0" class="empty-message">
-              No pending hours for approval.
-            </div>
-            
-            <div *ngIf="!isLoadingHours && !hoursError && pendingHours.length > 0" class="hours-list-content">
-              <ng-container *ngFor="let hour of pendingHours.slice(0, 5); let i = index">
-                <div class="hour-item">
-                  <div class="hour-employee" *ngIf="hour.employee">{{ hour.employee.full_name }}</div>
-                  <div class="hour-date">Date: {{ hour.date | date }}</div>
-                  <div class="hour-details">
-                    <span>Clock In: {{ hour.clock_in | date:'shortTime' }}</span>
-                    <span *ngIf="hour.clock_out">Clock Out: {{ hour.clock_out | date:'shortTime' }}</span>
-                  </div>
-                  <mat-divider *ngIf="i < pendingHours.slice(0, 5).length - 1"></mat-divider>
-                </div>
+              <ng-container matColumnDef="manager">
+                <th mat-header-cell *matHeaderCellDef>Manager</th>
+                <td mat-cell *matCellDef="let store">
+                  <span *ngIf="store.manager">{{ store.manager.full_name }}</span>
+                  <span *ngIf="!store.manager" class="unassigned">Unassigned</span>
+                </td>
               </ng-container>
               
-              <div *ngIf="pendingHours.length > 5" class="view-more">
-                <button mat-button color="primary" (click)="navigateToHoursApproval()">View All Pending Hours</button>
+              <ng-container matColumnDef="employees">
+                <th mat-header-cell *matHeaderCellDef>Employees</th>
+                <td mat-cell *matCellDef="let store">{{ store.employee_count || 0 }}</td>
+              </ng-container>
+              
+              <ng-container matColumnDef="actions">
+                <th mat-header-cell *matHeaderCellDef></th>
+                <td mat-cell *matCellDef="let store">
+                  <button mat-icon-button [routerLink]="['/stores', store._id]" matTooltip="View Store">
+                    <mat-icon>visibility</mat-icon>
+                  </button>
+                </td>
+              </ng-container>
+              
+              <tr mat-header-row *matHeaderRowDef="['name', 'manager', 'employees', 'actions']"></tr>
+              <tr mat-row *matRowDef="let row; columns: ['name', 'manager', 'employees', 'actions'];"></tr>
+            </table>
+            
+            <div *ngIf="stores.length > 5" class="view-more">
+              <button mat-button color="primary" (click)="navigateToStores()">View All Stores</button>
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
+      
+      <mat-card class="content-card recent-activity">
+        <mat-card-header>
+          <mat-card-title>Recent Activity</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div *ngIf="isLoadingActivity" class="loading-indicator">
+            <mat-spinner diameter="30"></mat-spinner>
+            <span>Loading activity...</span>
+          </div>
+          
+          <div *ngIf="activityError" class="error-message">
+            {{ activityError }}
+          </div>
+          
+          <div *ngIf="!isLoadingActivity && !activityError && recentActivity.length === 0" class="empty-message">
+            No recent activity found.
+          </div>
+          
+          <div *ngIf="!isLoadingActivity && !activityError && recentActivity.length > 0" class="activity-list">
+            <div *ngFor="let activity of recentActivity" class="activity-item">
+              <div class="activity-icon" [ngClass]="activity.type">
+                <mat-icon>{{ getActivityIcon(activity.type) }}</mat-icon>
+              </div>
+              <div class="activity-content">
+                <div class="activity-text">{{ activity.description }}</div>
+                <div class="activity-time">{{ activity.timestamp | date:'medium' }}</div>
               </div>
             </div>
-          </mat-card-content>
-        </mat-card>
-      </div>
-    </div>
-    
-    <!-- Employee Dashboard -->
-    <div *ngIf="isEmployee" class="employee-dashboard">
-      <div class="welcome-card">
-        <mat-card>
-          <mat-card-header>
-            <mat-card-title>Welcome, {{ currentUser?.full_name || 'Employee' }}!</mat-card-title>
-          </mat-card-header>
-          <mat-card-content>
-            <p>Access your work schedule, track your hours, and submit requests.</p>
-          </mat-card-content>
-          <mat-card-actions>
-            <button mat-button color="primary" (click)="navigateToHours()">Manage Hours</button>
-            <button mat-button color="primary" (click)="navigateToProfile()">Profile</button>
-          </mat-card-actions>
-        </mat-card>
-      </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
       
-      <div class="quick-actions">
-        <mat-card>
-          <mat-card-header>
-            <mat-card-title>Quick Actions</mat-card-title>
-          </mat-card-header>
-          <mat-card-content>
-            <div class="action-buttons">
-              <button mat-raised-button color="primary" (click)="navigateToHours()">
-                <mat-icon>access_time</mat-icon>
-                <span>Clock In/Out</span>
-              </button>
-              
-              <button mat-raised-button color="accent" (click)="navigateToHours()">
-                <mat-icon>calendar_today</mat-icon>
-                <span>View Schedule</span>
-              </button>
-              
-              <button mat-raised-button (click)="navigateToHours()">
-                <mat-icon>assignment</mat-icon>
-                <span>Submit Request</span>
-              </button>
-              
-              <button mat-raised-button (click)="navigateToHours()">
-                <mat-icon>list_alt</mat-icon>
-                <span>View Payslips</span>
-              </button>
+      <mat-card class="content-card pending-approvals">
+        <mat-card-header>
+          <mat-card-title>Pending Approvals</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div *ngIf="isLoadingHours" class="loading-indicator">
+            <mat-spinner diameter="30"></mat-spinner>
+            <span>Loading hours...</span>
+          </div>
+          
+          <div *ngIf="hoursError" class="error-message">
+            {{ hoursError }}
+          </div>
+          
+          <div *ngIf="!isLoadingHours && !hoursError && pendingHours.length === 0" class="empty-message">
+            No pending hours found.
+          </div>
+          
+          <div *ngIf="!isLoadingHours && !hoursError && pendingHours.length > 0" class="hours-list-content">
+            <div *ngFor="let hour of pendingHours.slice(0, 5); let i = index" class="hour-item">
+              <div class="hour-employee" *ngIf="hour.employee">{{ hour.employee.full_name }}</div>
+              <div class="hour-details">
+                <span class="hour-date">{{ hour.date | date }}</span>
+                <span class="hour-time">{{ getDurationString(hour) }}</span>
+              </div>
+              <div class="hour-actions">
+                <button mat-icon-button (click)="approveHours(hour)" color="primary" matTooltip="Approve">
+                  <mat-icon>check_circle</mat-icon>
+                </button>
+                <button mat-icon-button (click)="rejectHours(hour)" color="warn" matTooltip="Reject">
+                  <mat-icon>cancel</mat-icon>
+                </button>
+              </div>
+              <mat-divider *ngIf="i < pendingHours.slice(0, 5).length - 1"></mat-divider>
             </div>
-          </mat-card-content>
-        </mat-card>
-      </div>
-      
-      <div class="recent-activity">
-        <mat-card>
-          <mat-card-header>
-            <mat-card-title>Recent Activity</mat-card-title>
-          </mat-card-header>
-          <mat-card-content>
-            <div class="empty-message">
-              No recent activity found.
+            
+            <div *ngIf="pendingHours.length > 5" class="view-more">
+              <button mat-button color="primary" (click)="navigateToHoursApproval()">View All Pending Approvals</button>
             </div>
-          </mat-card-content>
-        </mat-card>
-      </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
     </div>
   </div>
+  
+  <!-- Manager Dashboard -->
+  <div *ngIf="isManager" class="manager-dashboard">
+    <h1 class="dashboard-title">Manager Dashboard</h1>
+    
+    <div *ngIf="stores.length > 0" class="manager-store-title">
+      <h2>{{ stores[0].name }}</h2>
+    </div>
+    
+    <!-- Quick Stats Row -->
+    <div class="stats-row">
+      <mat-card class="stats-card">
+        <mat-card-content>
+          <div class="stats-content">
+            <div class="stats-icon">
+              <mat-icon>people</mat-icon>
+            </div>
+            <div class="stats-info">
+              <div class="stats-value">{{ totalEmployees }}</div>
+              <div class="stats-label">Team Members</div>
+            </div>
+          </div>
+        </mat-card-content>
+        <mat-card-actions>
+          <button mat-button color="primary" (click)="navigateToEmployees()">View Team</button>
+        </mat-card-actions>
+      </mat-card>
+      
+      <mat-card class="stats-card">
+        <mat-card-content>
+          <div class="stats-content">
+            <div class="stats-icon">
+              <mat-icon>attach_money</mat-icon>
+            </div>
+            <div class="stats-info">
+              <div class="stats-value">${{ totalSales || 0 }}</div>
+              <div class="stats-label">Today's Sales</div>
+            </div>
+          </div>
+        </mat-card-content>
+        <mat-card-actions>
+          <button mat-button color="primary" (click)="navigateToSales()">View Sales</button>
+        </mat-card-actions>
+      </mat-card>
+      
+      <mat-card class="stats-card">
+        <mat-card-content>
+          <div class="stats-content">
+            <div class="stats-icon">
+              <mat-icon>schedule</mat-icon>
+            </div>
+            <div class="stats-info">
+              <div class="stats-value">{{ totalPendingHours }}</div>
+              <div class="stats-label">Pending Approvals</div>
+            </div>
+          </div>
+        </mat-card-content>
+        <mat-card-actions>
+          <button mat-button color="primary" (click)="navigateToHoursApproval()">Review Hours</button>
+        </mat-card-actions>
+      </mat-card>
+    </div>
+    
+    <!-- Main Content Row -->
+    <div class="content-row">
+      <mat-card class="content-card team-members">
+        <mat-card-header>
+          <mat-card-title>My Team</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div *ngIf="isLoadingEmployees" class="loading-indicator">
+            <mat-spinner diameter="30"></mat-spinner>
+            <span>Loading team members...</span>
+          </div>
+          
+          <div *ngIf="employeesError" class="error-message">
+            {{ employeesError }}
+          </div>
+          
+          <div *ngIf="!isLoadingEmployees && !employeesError && employees.length === 0" class="empty-message">
+            No team members found.
+          </div>
+          
+          <div *ngIf="!isLoadingEmployees && !employeesError && employees.length > 0" class="employee-list-content">
+            <div *ngFor="let employee of employees.slice(0, 5); let i = index" class="employee-item">
+              <div class="employee-avatar">{{ getEmployeeInitials(employee) }}</div>
+              <div class="employee-info">
+                <div class="employee-name">{{ employee.full_name }}</div>
+                <div class="employee-position">{{ employee.position }}</div>
+                <div class="employee-status" [ngClass]="'status-' + employee.employment_status">
+                  {{ employee.employment_status | titlecase }}
+                </div>
+              </div>
+              <div class="employee-actions">
+                <button mat-icon-button [routerLink]="['/employees', employee._id]" matTooltip="View Details">
+                  <mat-icon>visibility</mat-icon>
+                </button>
+              </div>
+              <mat-divider *ngIf="i < employees.slice(0, 5).length - 1"></mat-divider>
+            </div>
+            
+            <div *ngIf="employees.length > 5" class="view-more">
+              <button mat-button color="primary" (click)="navigateToEmployees()">View All Team Members</button>
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
+      
+      <mat-card class="content-card today-schedule">
+        <mat-card-header>
+          <mat-card-title>Today's Schedule</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div *ngIf="isLoadingSchedule" class="loading-indicator">
+            <mat-spinner diameter="30"></mat-spinner>
+            <span>Loading schedule...</span>
+          </div>
+          
+          <div *ngIf="scheduleError" class="error-message">
+            {{ scheduleError }}
+          </div>
+          
+          <div *ngIf="!isLoadingSchedule && !scheduleError && todaySchedule.length === 0" class="empty-message">
+            No shifts scheduled for today.
+          </div>
+          
+          <div *ngIf="!isLoadingSchedule && !scheduleError && todaySchedule.length > 0" class="schedule-list">
+            <div *ngFor="let shift of todaySchedule; let i = index" class="schedule-item">
+              <div class="schedule-time">{{ shift.start_time | date:'shortTime' }} - {{ shift.end_time | date:'shortTime' }}</div>
+              <div class="schedule-employees">
+                <div *ngFor="let emp of shift.employees" class="schedule-employee">
+                  <span class="employee-dot" [ngClass]="'status-' + emp.status"></span>
+                  <span class="employee-name">{{ emp.name }}</span>
+                </div>
+              </div>
+              <mat-divider *ngIf="i < todaySchedule.length - 1"></mat-divider>
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
+      
+      <mat-card class="content-card inventory-alerts">
+        <mat-card-header>
+          <mat-card-title>Inventory Alerts</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div *ngIf="isLoadingInventory" class="loading-indicator">
+            <mat-spinner diameter="30"></mat-spinner>
+            <span>Loading inventory...</span>
+          </div>
+          
+          <div *ngIf="inventoryError" class="error-message">
+            {{ inventoryError }}
+          </div>
+          
+          <div *ngIf="!isLoadingInventory && !inventoryError && inventoryAlerts.length === 0" class="empty-message">
+            No inventory alerts at this time.
+          </div>
+          
+          <div *ngIf="!isLoadingInventory && !inventoryError && inventoryAlerts.length > 0" class="alert-list">
+            <div *ngFor="let alert of inventoryAlerts; let i = index" class="alert-item">
+              <div class="alert-icon" [ngClass]="alert.severity">
+                <mat-icon>{{ getAlertIcon(alert.severity) }}</mat-icon>
+              </div>
+              <div class="alert-content">
+                <div class="alert-text">{{ alert.message }}</div>
+                <div class="alert-info">{{ alert.item_name }} - {{ alert.quantity }} remaining</div>
+              </div>
+              <div class="alert-actions">
+                <button mat-icon-button (click)="createStockRequest(alert.item_id)" color="primary" matTooltip="Create Request">
+                  <mat-icon>add_shopping_cart</mat-icon>
+                </button>
+              </div>
+              <mat-divider *ngIf="i < inventoryAlerts.length - 1"></mat-divider>
+            </div>
+            
+            <div *ngIf="inventoryAlerts.length > 3" class="view-more">
+              <button mat-button color="primary" (click)="navigateToInventory()">View All Alerts</button>
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+  </div>
+  
+  <!-- Employee Dashboard -->
+  <div *ngIf="isEmployee" class="employee-dashboard">
+    <h1 class="dashboard-title">Employee Dashboard</h1>
+    
+    <div class="greeting-card">
+      <mat-card>
+        <mat-card-content>
+          <div class="greeting-content">
+            <div class="greeting-avatar">{{ getUserInitials() }}</div>
+            <div class="greeting-text">
+              <h2>Welcome back, {{ currentUser?.full_name || 'Employee' }}!</h2>
+              <p>{{ getGreetingMessage() }}</p>
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+    
+    <div class="clock-status-card">
+      <mat-card>
+        <mat-card-header>
+          <mat-card-title>Current Status</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="clock-status">
+            <div class="status-icon" [ngClass]="{'clocked-in': clockedIn, 'clocked-out': !clockedIn}">
+              <mat-icon>{{ clockedIn ? 'access_time_filled' : 'access_time' }}</mat-icon>
+            </div>
+            <div class="status-text">
+              <h3>{{ clockedIn ? 'Clocked In' : 'Not Clocked In' }}</h3>
+              <p *ngIf="clockedIn">Since {{ clockInTime | date:'shortTime' }}</p>
+            </div>
+          </div>
+          <div class="clock-actions">
+            <button *ngIf="!clockedIn" mat-raised-button color="primary" (click)="clockIn()">
+              <mat-icon>login</mat-icon>
+              Clock In
+            </button>
+            <button *ngIf="clockedIn" mat-raised-button color="warn" (click)="clockOut()">
+              <mat-icon>logout</mat-icon>
+              Clock Out
+            </button>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+    
+    <div class="quick-actions">
+      <mat-card>
+        <mat-card-header>
+          <mat-card-title>Quick Actions</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="action-buttons">
+            <button mat-raised-button color="primary" (click)="navigateToHours()">
+              <mat-icon>schedule</mat-icon>
+              <span>View Hours</span>
+            </button>
+            
+            <button mat-raised-button color="accent" (click)="navigateToSchedule()">
+              <mat-icon>calendar_today</mat-icon>
+              <span>View Schedule</span>
+            </button>
+            
+            <button mat-raised-button (click)="navigateToRequests()">
+              <mat-icon>request_page</mat-icon>
+              <span>Submit Request</span>
+            </button>
+            
+            <button mat-raised-button (click)="navigateToPayment()">
+              <mat-icon>payment</mat-icon>
+              <span>View Payments</span>
+            </button>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+    
+    <div class="content-row">
+      <mat-card class="content-card weekly-hours">
+        <mat-card-header>
+          <mat-card-title>This Week's Hours</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div *ngIf="isLoadingWeeklyHours" class="loading-indicator">
+            <mat-spinner diameter="30"></mat-spinner>
+            <span>Loading hours...</span>
+          </div>
+          
+          <div *ngIf="weeklyHoursError" class="error-message">
+            {{ weeklyHoursError }}
+          </div>
+          
+          <div *ngIf="!isLoadingWeeklyHours && !weeklyHoursError && weeklyHours.length === 0" class="empty-message">
+            No hours recorded this week.
+          </div>
+          
+          <div *ngIf="!isLoadingWeeklyHours && !weeklyHoursError && weeklyHours.length > 0" class="hours-table-wrapper">
+            <table class="hours-table">
+              <thead>
+                <tr>
+                  <th>Day</th>
+                  <th>Hours</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let day of weekDays" [ngClass]="{'today': isToday(day.date)}">
+                  <td class="day-cell">
+                    <div class="day-name">{{ day.name }}</div>
+                    <div class="day-date">{{ day.date | date:'MMM d' }}</div>
+                  </td>
+                  <td class="hours-cell">
+                    <ng-container *ngIf="getHoursForDay(day.date) as hours; else noHours">
+                      {{ hours.total_hours | number:'1.1-1' }}
+                    </ng-container>
+                    <ng-template #noHours>-</ng-template>
+                  </td>
+                  <td class="status-cell">
+                    <div *ngIf="getHoursForDay(day.date) as hours" class="status-badge" [ngClass]="getStatusClass(hours.status)">
+                      {{ hours.status | titlecase }}
+                    </div>
+                  </td>
+                </tr>
+                <tr class="total-row">
+                  <td>Total</td>
+                  <td>{{ totalWeeklyHours | number:'1.1-1' }}</td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </mat-card-content>
+      </mat-card>
+      
+      <mat-card class="content-card upcoming-schedule">
+        <mat-card-header>
+          <mat-card-title>Upcoming Schedule</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div *ngIf="isLoadingSchedule" class="loading-indicator">
+            <mat-spinner diameter="30"></mat-spinner>
+            <span>Loading schedule...</span>
+          </div>
+          
+          <div *ngIf="scheduleError" class="error-message">
+            {{ scheduleError }}
+          </div>
+          
+          <div *ngIf="!isLoadingSchedule && !scheduleError && upcomingSchedule.length === 0" class="empty-message">
+            No upcoming shifts scheduled.
+          </div>
+          
+          <div *ngIf="!isLoadingSchedule && !scheduleError && upcomingSchedule.length > 0" class="schedule-list">
+            <div *ngFor="let shift of upcomingSchedule; let i = index" class="schedule-item">
+              <div class="schedule-date">{{ shift.date | date:'E, MMM d' }}</div>
+              <div class="schedule-time">{{ shift.start_time | date:'shortTime' }} - {{ shift.end_time | date:'shortTime' }}</div>
+              <div class="schedule-hours">{{ getShiftHours(shift) }} hrs</div>
+              <mat-divider *ngIf="i < upcomingSchedule.length - 1"></mat-divider>
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+  </div>
+</div>

@@ -268,6 +268,8 @@ export class HoursListComponent implements OnInit, OnDestroy {
   displayedColumns: string[] = ['date', 'employee', 'store', 'clockIn', 'clockOut', 'hours', 'status', 'actions'];
   filterForm: FormGroup;
   
+  private employeeMap: { [id: string]: Employee } = {};
+  private storeMap: { [id: string]: Store } = {};
   // Expose enum to template
   HoursStatus = HoursStatus;
   
@@ -330,113 +332,107 @@ export class HoursListComponent implements OnInit, OnDestroy {
   
   loadHours(): void {
     this.loading = true;
-    
     const filters = this.filterForm.value;
     
-    // If not admin or manager, employee can only see their own hours
-    if (!this.isAdmin && !this.isManager) {
-      this.hoursService.getEmployeeHours(
-        this.currentUserId,
-        filters.start_date,
-        filters.end_date,
-        filters.status
-      ).subscribe({
-        next: (hours) => {
-          this.hours = hours;
-          this.loading = false;
-        },
-        error: (error) => {
-          this.snackBar.open('Error loading hours records', 'Close', { duration: 3000 });
-          this.loading = false;
+    // Provide safe defaults and ensure date handling is robust
+    let startDate = null;
+    let endDate = null;
+    
+    try {
+      if (filters.start_date) {
+        startDate = new Date(filters.start_date);
+        // Validate the date is valid
+        if (isNaN(startDate.getTime())) {
+          startDate = null;
         }
-      });
-    } 
-    // For admin and manager
-    else {
-      // If store filter is selected
-      if (filters.store_id) {
-        this.hoursService.getStoreHours(
-          filters.store_id,
-          filters.start_date,
-          filters.end_date,
-          filters.status
-        ).subscribe({
-          next: (hours) => {
-            this.hours = hours;
-            
-            // If employee filter is also selected, filter client-side
-            if (filters.employee_id) {
-              this.hours = this.hours.filter(h => h.employee_id === filters.employee_id);
-            }
-            this.loading = false;
-          },
-          error: (error) => {
-            this.snackBar.open('Error loading hours records', 'Close', { duration: 3000 });
-            this.loading = false;
-          }
-        });
-      } 
-      // If only employee filter is selected
-      else if (filters.employee_id) {
-        this.hoursService.getEmployeeHours(
-          filters.employee_id,
-          filters.start_date,
-          filters.end_date,
-          filters.status
-        ).subscribe({
-          next: (hours) => {
-            this.hours = hours;
-            this.loading = false;
-          },
-          error: (error) => {
-            this.snackBar.open('Error loading hours records', 'Close', { duration: 3000 });
-            this.loading = false;
-          }
-        });
       }
-      // If no employee or store filter, load pending approvals for managers/admins or all records for admins
-      else {
-        this.hoursService.getPendingApprovals().subscribe({
-          next: (hours) => {
-            this.hours = hours;
-            
-            // Apply status filter if selected
-            if (filters.status) {
-              this.hours = this.hours.filter(h => h.status === filters.status);
-            }
-            
-            // Apply date filters if selected
-            if (filters.start_date) {
-              const startDate = new Date(filters.start_date);
-              this.hours = this.hours.filter(h => new Date(h.date) >= startDate);
-            }
-            
-            if (filters.end_date) {
-              const endDate = new Date(filters.end_date);
-              this.hours = this.hours.filter(h => new Date(h.date) <= endDate);
-            }
-            
-            this.loading = false;
-          },
-          error: (error) => {
-            this.snackBar.open('Error loading hours records', 'Close', { duration: 3000 });
-            this.loading = false;
-          }
-        });
+      
+      if (filters.end_date) {
+        endDate = new Date(filters.end_date);
+        // Validate the date is valid
+        if (isNaN(endDate.getTime())) {
+          endDate = null;
+        }
       }
+    } catch (e) {
+      console.warn('Date parsing error:', e);
+      // Reset invalid dates
+      startDate = null;
+      endDate = null;
     }
-  }
-  
-  loadStores(): void {
-    this.storeService.getStores().subscribe({
-      next: (stores: Store[]) => {
-        this.stores = stores;
+    
+    // Convert to ISO string for API if dates exist and are valid
+    const formattedStartDate = startDate ? startDate.toISOString() : undefined;
+    const formattedEndDate = endDate ? endDate.toISOString() : undefined;
+    
+    console.log('Fetching hours with filters:', {
+      employee_id: filters.employee_id || undefined,
+      store_id: filters.store_id || undefined,
+      status: filters.status || undefined,
+      start_date: formattedStartDate,
+      end_date: formattedEndDate
+    });
+    
+    // For all users, get all hours - we'll handle permissions in the API
+    this.hoursService.getAllHours(
+      0,            // skip
+      100,          // limit
+      filters.employee_id || undefined,
+      filters.store_id || undefined,
+      filters.status || undefined,
+      formattedStartDate,  // Now this variable is defined
+      formattedEndDate     // Now this variable is defined
+    ).subscribe({
+      next: (hours) => {
+        console.log('Hours received:', hours);
+        
+        // Enhance hours with employee and store data from our maps
+        this.hours = hours.map(hour => {
+          // Create a new object to avoid modifying the original
+          const enhancedHour = { ...hour };
+          
+          // Populate employee data if not already present
+          if (hour.employee_id && !hour.employee && this.employeeMap[hour.employee_id]) {
+            enhancedHour.employee = this.employeeMap[hour.employee_id];
+          }
+          
+          // Populate store data if not already present
+          if (hour.store_id && !hour.store && this.storeMap[hour.store_id]) {
+            enhancedHour.store = this.storeMap[hour.store_id];
+          }
+          
+          return enhancedHour;
+        });
+        
+        this.loading = false;
       },
       error: (error) => {
-        this.snackBar.open('Error loading stores', 'Close', { duration: 3000 });
+        console.error('Error loading hours:', error);
+        this.snackBar.open('Error loading hours records', 'Close', { duration: 3000 });
+        this.loading = false;
+        this.hours = [];
       }
     });
   }
+  
+loadStores(): void {
+  this.storeService.getStores().subscribe({
+    next: (stores: Store[]) => {
+      this.stores = stores;
+      
+      // Populate store map for quick lookups
+      this.storeMap = {};
+      stores.forEach(store => {
+        this.storeMap[store._id] = store;
+      });
+      
+      console.log('Loaded stores into map:', this.storeMap);
+    },
+    error: (error) => {
+      this.snackBar.open('Error loading stores', 'Close', { duration: 3000 });
+    }
+  });
+}
   
   loadEmployees(): void {
     if (this.isAdmin || this.isManager) {
@@ -457,6 +453,14 @@ export class HoursListComponent implements OnInit, OnDestroy {
     this.employeeService.getEmployees().subscribe({
       next: (employees: Employee[]) => {
         this.employees = employees;
+        
+        // Populate employee map for quick lookups
+        this.employeeMap = {};
+        employees.forEach(employee => {
+          this.employeeMap[employee._id] = employee;
+        });
+        
+        console.log('Loaded employees into map:', this.employeeMap);
       },
       error: (error: any) => {
         this.snackBar.open('Error loading employees', 'Close', { duration: 3000 });
@@ -464,6 +468,21 @@ export class HoursListComponent implements OnInit, OnDestroy {
     });
   }
   
+  // Add methods to get employee and store names
+  getEmployeeName(employeeId: string): string {
+    if (!employeeId) return 'Unknown Employee';
+    
+    const employee = this.employeeMap[employeeId];
+    return employee ? employee.full_name : 'Unknown Employee';
+  }
+  
+  getStoreName(storeId: string): string {
+    if (!storeId) return 'Unknown Store';
+    
+    const store = this.storeMap[storeId];
+    return store ? store.name : 'Unknown Store';
+  }
+
   loadEmployeesByStore(storeId: string): void {
     this.employeeService.getEmployeesByStore(storeId).subscribe({
       next: (employees: Employee[]) => {
