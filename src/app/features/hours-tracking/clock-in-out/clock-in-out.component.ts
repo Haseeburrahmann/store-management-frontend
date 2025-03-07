@@ -11,14 +11,15 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
-import { HoursService } from '../../../core/auth/services/hours.service';
-import { StoreService } from '../../../core/auth/services/store.service';
-import { EmployeeService } from '../../../core/auth/services/employee.service';
-import { AuthService } from '../../../core/auth/services/auth.service';
-import { ClockInRequest, ClockOutRequest, Hours } from '../../../core/auth/models/hours.model';
+// Updated import paths
+import { HoursService } from '../../../core/services/hours.service';
+import { StoreService } from '../../../core/services/store.service';
+import { EmployeeService } from '../../../core/services/employee.service';
+import { AuthService } from '../../../core/services/auth.service';
+import { ClockInRequest, ClockOutRequest, Hours } from '../../../shared/models/hours.model';
 import { Observable, of, Subscription, switchMap, catchError, finalize } from 'rxjs';
 import { Store } from '../../../shared/models/store.model';
-import { Employee } from '../../../core/auth/models/employee.model';
+import { Employee } from '../../../shared/models/employee.model';
 
 @Component({
   selector: 'app-clock-in-out',
@@ -229,8 +230,8 @@ export class ClockInOutComponent implements OnInit, OnDestroy {
         this.currentUserId = user._id;
         
         // Use hasPermission method to determine roles
-        this.isAdmin = this.authService.hasPermission('PermissionArea.USERS:PermissionAction.APPROVE');
-        this.isManager = this.authService.hasPermission('PermissionArea.EMPLOYEES:PermissionAction.APPROVE') && 
+        this.isAdmin = this.authService.hasPermission('users', 'approve');
+        this.isManager = this.authService.hasPermission('employees', 'approve') && 
                         !this.isAdmin; // Manager is someone with employee approve permissions but not admin
         
         // Set employee_id to current user if not manager

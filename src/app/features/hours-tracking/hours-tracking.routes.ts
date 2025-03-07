@@ -14,23 +14,28 @@ export const HOURS_TRACKING_ROUTES: Routes = [
     children: [
       { 
         path: '', 
-        component: HoursListComponent 
+        component: HoursListComponent,
+        data: { permission: 'hours:read' }
       },
       { 
         path: 'approval', 
-        component: HoursApprovalComponent 
+        component: HoursApprovalComponent,
+        data: { permission: 'hours:approve' }
       },
       { 
         path: 'timesheet/:employeeId', 
-        component: TimesheetComponent 
+        component: TimesheetComponent,
+        data: { permission: 'hours:read' }
       },
       { 
         path: 'clock', 
-        component: ClockInOutComponent 
+        component: ClockInOutComponent,
+        data: { permission: 'hours:write' }
       },
       { 
         path: ':id', 
-        component: HoursDetailComponent 
+        component: HoursDetailComponent,
+        data: { permission: 'hours:read' }
       }
     ]
   }

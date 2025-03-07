@@ -15,8 +15,9 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { finalize } from 'rxjs';
 
-import { HoursService } from '../../../core/auth/services/hours.service';
-import { Hours, HoursApproval, HoursStatus } from '../../../core/auth/models/hours.model';
+// Updated import paths
+import { HoursService } from '../../../core/services/hours.service';
+import { Hours, HoursApproval, HoursStatus } from '../../../shared/models/hours.model';
 
 @Component({
   selector: 'app-hours-approval',
@@ -57,14 +58,14 @@ import { Hours, HoursApproval, HoursStatus } from '../../../core/auth/models/hou
           <mat-card-content class="pt-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p><strong>Employee:</strong> {{ hours?.employee_name || 'Unknown' }}</p>
-                <p><strong>Store:</strong> {{ hours?.store_name || 'Unknown' }}</p>
+                <p><strong>Employee:</strong> {{ hours?.employee?.full_name || 'Unknown' }}</p>
+                <p><strong>Store:</strong> {{ hours?.store?.name || 'Unknown' }}</p>
                 <p><strong>Date:</strong> {{ hours?.clock_in ? (formatDate(hours?.clock_in) | date:'mediumDate') : '-' }}</p>
               </div>
               <div>
                 <p><strong>Clock In:</strong> {{ hours?.clock_in ? (formatDate(hours?.clock_in) | date:'shortTime') : '-' }}</p>
                 <p><strong>Clock Out:</strong> {{ hours?.clock_out ? (formatDate(hours?.clock_out) | date:'shortTime') : '-' }}</p>
-                <p><strong>Total Hours:</strong> {{ hours?.total_minutes !== undefined && hours?.total_minutes !== null ? ((hours?.total_minutes || 0) / 60).toFixed(2) : '-' }}</p>
+                <p><strong>Total Hours:</strong> {{ calculateTotalHours() }}</p>
               </div>
             </div>
             
@@ -232,5 +233,34 @@ export class HoursApprovalComponent implements OnInit {
   formatDate(date: string | Date | undefined | null): Date {
     if (!date) return new Date();
     return new Date(date);
+  }
+
+  calculateTotalHours(): string {
+    if (!this.hours || !this.hours.clock_in || !this.hours.clock_out) {
+      return '-';
+    }
+
+    try {
+      const clockIn = new Date(this.hours.clock_in);
+      const clockOut = new Date(this.hours.clock_out);
+      
+      // Calculate difference in milliseconds
+      let diffMs = clockOut.getTime() - clockIn.getTime();
+      
+      // Subtract break time if available
+      if (this.hours.break_start && this.hours.break_end) {
+        const breakStart = new Date(this.hours.break_start);
+        const breakEnd = new Date(this.hours.break_end);
+        const breakMs = breakEnd.getTime() - breakStart.getTime();
+        diffMs -= breakMs;
+      }
+      
+      // Convert to hours with 2 decimal places
+      const hours = diffMs / (1000 * 60 * 60);
+      return hours.toFixed(2);
+    } catch (error) {
+      console.error('Error calculating hours:', error);
+      return '-';
+    }
   }
 }

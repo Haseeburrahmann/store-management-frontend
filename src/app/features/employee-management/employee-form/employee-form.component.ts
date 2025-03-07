@@ -24,6 +24,16 @@ import { RoleService } from '../../../core/services/role.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { catchError } from 'rxjs/operators';
 import { of, Subscription } from 'rxjs';
+import { UserService } from '../../../core/services/user.service';
+
+interface User {
+  _id: string;
+  full_name: string;
+  email: string;
+  phone_number?: string;
+  role_id?: string;
+  is_active?: boolean;
+}
 
 @Component({
   selector: 'app-employee-form',
@@ -55,6 +65,7 @@ export class EmployeeFormComponent implements OnInit, OnDestroy {
   isLoading = false;
   stores: Store[] = [];
   roles: Role[] = [];
+  users: User[] = []; // Added users array
   isAdmin = false;
   isManager = false;
   managedStoreId = '';
@@ -71,13 +82,15 @@ export class EmployeeFormComponent implements OnInit, OnDestroy {
     private storeService: StoreService,
     private roleService: RoleService,
     private authService: AuthService,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private userService : UserService
   ) {}
 
   ngOnInit(): void {
     this.initializeForm();
     this.loadStores();
     this.loadRoles();
+    this.loadUsers(); // Added to load users
     this.checkUserRole();
     
     this.employeeId = this.route.snapshot.paramMap.get('id') || '';
@@ -96,22 +109,22 @@ export class EmployeeFormComponent implements OnInit, OnDestroy {
 
   initializeForm(): void {
     this.employeeForm = this.fb.group({
-      email: ['', [Validators.required, Validators.email]],
-      user_id: ['', Validators.required], 
-      full_name: ['', Validators.required],
+      user_id: ['', Validators.required],
+      full_name: [{ value: '', disabled: true }, Validators.required],
+      email: [{ value: '', disabled: true }, [Validators.required, Validators.email]],
       phone_number: [''],
       is_active: [true],
       position: ['', Validators.required],
       hourly_rate: [0, [Validators.required, Validators.min(0)]],
-      employment_status: ['active'],
+      employment_status: ['active', Validators.required],
       emergency_contact_name: [''],
       emergency_contact_phone: [''],
       address: [''],
       city: [''],
       state: [''],
       zip_code: [''],
-      store_id: [''],
-      hire_date: [new Date()],
+      store_id: ['', Validators.required],
+      hire_date: [new Date(), Validators.required],
       role_id: [''],
       password: ['', this.isEditMode ? [] : Validators.required]
     });
@@ -143,18 +156,40 @@ export class EmployeeFormComponent implements OnInit, OnDestroy {
     });
   }
 
+  // New method to load users
+  loadUsers(): void {
+    // Check if the user has permission to view users
+    if (!this.authService.hasPermission('users', 'read')) {
+      this.error = 'You do not have permission to view users';
+      this.snackBar.open(this.error, 'Close', { duration: 3000 });
+      return;
+    }
+  
+    this.isLoading = true; // Show loading spinner while fetching users
+    // Assuming EmployeeService has a method to get available users
+    this.userService.getUsers().subscribe({
+      next: (users) => {
+        this.users = users.filter(user => user.is_active); // Only show active users
+        this.isLoading = false;
+      },
+      error: (error) => {
+        this.isLoading = false;
+        this.error = error.message || 'Error loading users';
+        console.error('Error loading users:', error);
+        this.snackBar.open('Error loading users: ' + this.error, 'Close', { duration: 3000 });
+      }
+    });
+  }
+
   checkUserRole(): void {
     this.userSubscription = this.authService.user$.subscribe(user => {
       if (user) {
-        // Check permissions using standardized format
         this.isAdmin = this.authService.hasPermission('users', 'approve');
         this.isManager = this.authService.hasPermission('employees', 'approve') && 
-                        !this.isAdmin;
+                       !this.isAdmin;
         
-        // For managed_store_id we still need to access it
         this.managedStoreId = (user as any).managed_store_id || '';
         
-        // If manager, pre-select their store
         if (this.isManager && this.managedStoreId) {
           this.employeeForm.patchValue({ store_id: this.managedStoreId });
           this.employeeForm.get('store_id')?.disable();
@@ -182,14 +217,12 @@ export class EmployeeFormComponent implements OnInit, OnDestroy {
         this.isLoading = false;
         
         if (employee) {
-          // Remove password field in edit mode
           this.employeeForm.removeControl('password');
           
-          // Format the hire date properly
           const hireDate = employee.hire_date ? new Date(employee.hire_date) : new Date();
           
-          // Map employee data to form
           this.employeeForm.patchValue({
+            user_id: employee.user_id,
             email: employee.email,
             full_name: employee.full_name,
             phone_number: employee.phone_number || '',
@@ -208,7 +241,6 @@ export class EmployeeFormComponent implements OnInit, OnDestroy {
             role_id: employee.role_id || ''
           });
           
-          // If manager, enforce store selection to their managed store
           if (this.isManager && this.managedStoreId) {
             this.employeeForm.patchValue({ store_id: this.managedStoreId });
             this.employeeForm.get('store_id')?.disable();
@@ -217,73 +249,117 @@ export class EmployeeFormComponent implements OnInit, OnDestroy {
       });
   }
 
-  onSubmit(): void {
-    debugger;
-    if (this.employeeForm.invalid) {
-      this.markFormGroupTouched(this.employeeForm);
-      return;
-    }
-    
-    this.submitInProgress = true;
-    this.error = '';
-    
-    // Get form values and handle disabled controls
-    const formData = { ...this.employeeForm.getRawValue() };
-    
-    // Format the hire date properly for API
-    if (formData.hire_date instanceof Date) {
-      formData.hire_date = formData.hire_date.toISOString();
-    }
-    
-    if (this.isEditMode) {
-      // Remove empty strings to avoid overwriting with empty values
-      Object.keys(formData).forEach(key => {
-        if (formData[key] === '') {
-          delete formData[key];
-        }
+  // Updated method to handle user selection
+  onUserSelect(userId: string): void {
+    const selectedUser = this.users.find(user => user._id === userId);
+    if (selectedUser) {
+      console.log('Selected user:', selectedUser); // Debug info
+      this.employeeForm.patchValue({
+        full_name: selectedUser.full_name,
+        email: selectedUser.email,
+        phone_number: selectedUser.phone_number || ''
       });
-      console.log('Sending employee data to API:', formData);
+    }
+  }
 
-      this.employeeService.updateEmployee(this.employeeId, formData as EmployeeUpdate)
-        .pipe(
-          catchError(error => {
-            this.submitInProgress = false;
-            this.error = error.message || 'Error updating employee';
-            console.error('Error updating employee:', error);
-            this.snackBar.open('Error updating employee: ' + this.error, 'Close', { duration: 3000 });
-            return of(null);
-          })
-        )
-        .subscribe(employee => {
-          this.submitInProgress = false;
-          
-          if (employee) {
-            this.snackBar.open('Employee updated successfully', 'Close', { duration: 3000 });
-            this.router.navigate(['/employees', this.employeeId]);
-          }
-        });
-    } else {
-      this.employeeService.createEmployee(formData as EmployeeCreate)
+  // In employee-form.component.ts - update the onSubmit method
+onSubmit(): void {
+  debugger;
+  if (this.employeeForm.invalid) {
+    this.markFormGroupTouched(this.employeeForm);
+    return;
+  }
+  
+  this.submitInProgress = true;
+  this.error = '';
+  
+  const formData = this.employeeForm.getRawValue();
+  
+  // Get the selected user's data directly from the users array
+  const userId = formData.user_id;
+  const selectedUser = this.users.find(user => user._id === userId);
+  
+  if (!selectedUser) {
+    this.error = 'Selected user not found';
+    this.snackBar.open(this.error, 'Close', { duration: 3000 });
+    this.submitInProgress = false;
+    return;
+  }
+  
+  if (formData.hire_date instanceof Date) {
+    formData.hire_date = formData.hire_date.toISOString();
+  }
+  
+  if (this.isEditMode) {
+    Object.keys(formData).forEach(key => {
+      if (formData[key] === '') {
+        delete formData[key];
+      }
+    });
+
+    this.employeeService.updateEmployee(this.employeeId, formData as EmployeeUpdate)
       .pipe(
         catchError(error => {
           this.submitInProgress = false;
-          // Log the full error object
-          console.error('Full error object:', error);
+          this.error = error.message || 'Error updating employee';
+          console.error('Error updating employee:', error);
+          this.snackBar.open('Error updating employee: ' + this.error, 'Close', { duration: 3000 });
+          return of(null);
+        })
+      )
+      .subscribe(employee => {
+        this.submitInProgress = false;
+        
+        if (employee) {
+          this.snackBar.open('Employee updated successfully', 'Close', { duration: 3000 });
+          this.router.navigate(['/employees', this.employeeId]);
+        }
+      });
+  } else {
+    // Create a new employee object manually with user data
+    const employeeData = {
+      user_id: userId,
+      full_name: selectedUser.full_name, // Get from selectedUser
+      email: selectedUser.email, // Get from selectedUser
+      phone_number: selectedUser.phone_number || '',
+      is_active: formData.is_active,
+      position: formData.position,
+      hourly_rate: formData.hourly_rate,
+      employment_status: formData.employment_status,
+      emergency_contact_name: formData.emergency_contact_name || null,
+      emergency_contact_phone: formData.emergency_contact_phone || null,
+      address: formData.address || null,
+      city: formData.city || null,
+      state: formData.state || null,
+      zip_code: formData.zip_code || null,
+      store_id: formData.store_id,
+      hire_date: formData.hire_date,
+      password: formData.password
+    };
+    
+    console.log('Sending employee data:', employeeData);
+    
+    this.employeeService.createEmployee(employeeData)
+      .pipe(
+        catchError(error => {
+          this.submitInProgress = false;
           this.error = error.message || 'Error creating employee';
           console.error('Error creating employee:', error);
           this.snackBar.open('Error creating employee: ' + this.error, 'Close', { duration: 3000 });
           return of(null);
         })
-      ).subscribe(employee => {
-          this.submitInProgress = false;
-          
-          if (employee) {
-            this.snackBar.open('Employee created successfully', 'Close', { duration: 3000 });
-            this.router.navigate(['/employees']);
-          }
-        });
-    }
+      )
+      .subscribe(employee => {
+        this.submitInProgress = false;
+        
+        if (employee) {
+          console.log('Employee created successfully:', employee);
+          this.snackBar.open('Employee created successfully', 'Close', { duration: 3000 });
+          this.router.navigate(['/employees']);
+        }
+      });
   }
+}
 
   markFormGroupTouched(formGroup: FormGroup): void {
     Object.values(formGroup.controls).forEach(control => {

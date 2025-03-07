@@ -15,9 +15,10 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatTableModule } from '@angular/material/table';
 import { Subscription } from 'rxjs';
 
-import { HoursService } from '../../../core/auth/services/hours.service';
-import { AuthService } from '../../../core/auth/services/auth.service';
-import { TimeSheetSummary } from '../../../core/auth/models/hours.model';
+// Updated import paths
+import { HoursService } from '../../../core/services/hours.service';
+import { AuthService } from '../../../core/services/auth.service';
+import { TimeSheetSummary } from '../../../shared/models/hours.model';
 
 @Component({
   selector: 'app-timesheet',
@@ -228,12 +229,12 @@ export class TimesheetComponent implements OnInit, OnDestroy {
   }
   
   getDailyHours(): {date: Date, hours: number}[] {
-    if (!this.timesheet) return [];
+    if (!this.timesheet || !this.timesheet.daily_hours) return [];
     
     return Object.entries(this.timesheet.daily_hours)
       .map(([dateStr, hours]) => ({
         date: new Date(dateStr),
-        hours
+        hours: typeof hours === 'number' ? hours : 0
       }))
       .sort((a, b) => a.date.getTime() - b.date.getTime());
   }

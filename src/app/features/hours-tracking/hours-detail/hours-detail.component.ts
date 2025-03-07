@@ -15,9 +15,10 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatChipsModule } from '@angular/material/chips';
 import { finalize, Subscription } from 'rxjs';
 
-import { HoursService } from '../../../core/auth/services/hours.service';
-import { AuthService } from '../../../core/auth/services/auth.service';
-import { Hours, HoursStatus, HoursUpdate } from '../../../core/auth/models/hours.model';
+// Updated import paths
+import { HoursService } from '../../../core/services/hours.service';
+import { AuthService } from '../../../core/services/auth.service';
+import { Hours, HoursStatus, HoursUpdate } from '../../../shared/models/hours.model';
 import { UserWithPermissions } from '../../../core/auth/models/user.model';
 
 @Component({
@@ -63,14 +64,14 @@ import { UserWithPermissions } from '../../../core/auth/models/user.model';
           <mat-card-content class="pt-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p><strong>Employee:</strong> {{ hours.employee_name || 'Unknown' }}</p>
-                <p><strong>Store:</strong> {{ hours.store_name || 'Unknown' }}</p>
-                <p><strong>Date:</strong> {{ formatDate(hours.clock_in) | date:'mediumDate' }}</p>
+                <p><strong>Employee:</strong> {{ hours.employee?.full_name || 'Unknown' }}</p>
+                <p><strong>Store:</strong> {{ hours.store?.name || 'Unknown' }}</p>
+                <p><strong>Date:</strong> {{ formatDate(hours.date) | date:'mediumDate' }}</p>
               </div>
               <div>
                 <p><strong>Clock In:</strong> {{ formatDate(hours.clock_in) | date:'shortTime' }}</p>
                 <p><strong>Clock Out:</strong> {{ hours.clock_out ? (formatDate(hours.clock_out) | date:'shortTime') : 'Active' }}</p>
-                <p><strong>Total Hours:</strong> {{ hours.total_minutes !== undefined && hours.total_minutes !== null ? ((hours.total_minutes || 0) / 60).toFixed(2) : '-' }}</p>
+                <p><strong>Total Hours:</strong> {{ calculateTotalHours() }}</p>
               </div>
             </div>
             
@@ -243,8 +244,8 @@ export class HoursDetailComponent implements OnInit, OnDestroy {
     });
     
     // Check permissions
-    this.canApprove = this.authService.hasPermission('PermissionArea.HOURS:PermissionAction.APPROVE');
-    this.canDelete = this.authService.hasPermission('PermissionArea.HOURS:PermissionAction.DELETE');
+    this.canApprove = this.authService.hasPermission('hours', 'approve');
+    this.canDelete = this.authService.hasPermission('hours', 'delete');
   }
   
   ngOnDestroy(): void {
@@ -281,8 +282,8 @@ export class HoursDetailComponent implements OnInit, OnDestroy {
   checkEditPermission(): void {
     if (!this.hours) return;
     
-    const isAdmin = this.authService.hasPermission('PermissionArea.USERS:PermissionAction.APPROVE');
-    const isManager = this.authService.hasPermission('PermissionArea.EMPLOYEES:PermissionAction.APPROVE') && !isAdmin;
+    const isAdmin = this.authService.hasPermission('users', 'approve');
+    const isManager = this.authService.hasPermission('employees', 'approve') && !isAdmin;
     
     // User can edit their own hours
     if (this.hours.employee_id === this.currentUserId) {
@@ -356,6 +357,35 @@ export class HoursDetailComponent implements OnInit, OnDestroy {
   formatDate(date: string | Date | undefined): Date {
     if (!date) return new Date();
     return new Date(date);
+  }
+  
+  calculateTotalHours(): string {
+    if (!this.hours || !this.hours.clock_in || !this.hours.clock_out) {
+      return '-';
+    }
+
+    try {
+      const clockIn = new Date(this.hours.clock_in);
+      const clockOut = new Date(this.hours.clock_out);
+      
+      // Calculate difference in milliseconds
+      let diffMs = clockOut.getTime() - clockIn.getTime();
+      
+      // Subtract break time if available
+      if (this.hours.break_start && this.hours.break_end) {
+        const breakStart = new Date(this.hours.break_start);
+        const breakEnd = new Date(this.hours.break_end);
+        const breakMs = breakEnd.getTime() - breakStart.getTime();
+        diffMs -= breakMs;
+      }
+      
+      // Convert to hours with 2 decimal places
+      const hours = diffMs / (1000 * 60 * 60);
+      return hours.toFixed(2);
+    } catch (error) {
+      console.error('Error calculating hours:', error);
+      return '-';
+    }
   }
   
   getStatusClass(status: string): string {

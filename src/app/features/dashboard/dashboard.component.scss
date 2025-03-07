@@ -1,0 +1,224 @@
+/* src/app/features/dashboard/dashboard.component.scss */
+
+.dashboard-container {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  
+  .dashboard-title {
+    font-size: 24px;
+    font-weight: 500;
+    margin-bottom: 24px;
+    color: #333;
+  }
+  
+  /* Stats Row Styles */
+  .stats-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+    
+    .stats-card {
+      flex: 1;
+      min-width: 220px;
+      
+      .stats-content {
+        display: flex;
+        align-items: center;
+        padding: 16px 0;
+        
+        .stats-icon {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          width: 64px;
+          height: 64px;
+          border-radius: 50%;
+          background-color: #f0f4f9;
+          margin-right: 16px;
+          
+          mat-icon {
+            font-size: 32px;
+            height: 32px;
+            width: 32px;
+            color: #3f51b5;
+          }
+        }
+        
+        .stats-info {
+          .stats-value {
+            font-size: 32px;
+            font-weight: 500;
+            line-height: 1.2;
+            color: #333;
+          }
+          
+          .stats-label {
+            font-size: 14px;
+            color: #666;
+          }
+        }
+      }
+    }
+  }
+  
+  /* Content Row Styles */
+  .content-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+    
+    .content-card {
+      flex: 1;
+      min-width: 300px;
+      
+      .loading-indicator {
+        display: flex;
+        align-items: center;
+        padding: 16px 0;
+        
+        mat-spinner {
+          margin-right: 16px;
+        }
+      }
+      
+      .empty-message {
+        padding: 32px 0;
+        text-align: center;
+        color: #666;
+      }
+      
+      .error-message {
+        padding: 16px;
+        margin: 16px 0;
+        background-color: rgba(244, 67, 54, 0.1);
+        border-left: 4px solid #f44336;
+        color: #f44336;
+      }
+      
+      .store-list-content, .employee-list-content, .hours-list-content {
+        .store-item, .employee-item, .hour-item {
+          padding: 16px 0;
+          
+          .store-name, .employee-name, .hour-employee {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 4px;
+          }
+          
+          .store-address, .employee-position, .hour-date {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 4px;
+          }
+          
+          .store-manager, .employee-store, .hour-details {
+            font-size: 14px;
+            color: #666;
+          }
+          
+          .employee-status {
+            margin-top: 4px;
+            
+            span {
+              padding: 2px 8px;
+              border-radius: 4px;
+              font-size: 12px;
+            }
+            
+            .status-active {
+              background-color: #e6f7ed;
+              color: #0d904f;
+            }
+            
+            .status-on_leave {
+              background-color: #fff3e0;
+              color: #f57c00;
+            }
+            
+            .status-terminated {
+              background-color: #ffebee;
+              color: #d32f2f;
+            }
+          }
+        }
+        
+        .view-more {
+          text-align: center;
+          margin-top: 16px;
+        }
+      }
+    }
+  }
+  
+  /* Employee Dashboard Specific Styles */
+  .employee-dashboard {
+    .welcome-card {
+      margin-bottom: 24px;
+    }
+    
+    .quick-actions {
+      margin-bottom: 24px;
+      
+      .action-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        padding: 16px 0;
+        
+        button {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          padding: 16px;
+          min-width: 120px;
+          
+          mat-icon {
+            font-size: 24px;
+            height: 24px;
+            width: 24px;
+            margin-bottom: 8px;
+          }
+        }
+      }
+    }
+    
+    .recent-activity {
+      margin-bottom: 24px;
+    }
+  }
+  
+  /* Responsive Adjustments */
+  @media (max-width: 768px) {
+    .stats-row {
+      flex-direction: column;
+      
+      .stats-card {
+        width: 100%;
+      }
+    }
+    
+    .content-row {
+      flex-direction: column;
+      
+      .content-card {
+        width: 100%;
+      }
+    }
+    
+    .employee-dashboard {
+      .quick-actions {
+        .action-buttons {
+          justify-content: center;
+          
+          button {
+            flex: 1;
+            min-width: 100px;
+          }
+        }
+      }
+    }
+  }
