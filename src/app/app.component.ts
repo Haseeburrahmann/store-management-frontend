@@ -1,42 +1,29 @@
 // src/app/app.component.ts
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
-import { MatSnackBarModule } from '@angular/material/snack-bar';
+import { RouterOutlet } from '@angular/router';
 import { AuthService } from './core/services/auth.service';
-import { NavigationComponent } from './features/navigation/navigation.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [
-    CommonModule,
-    RouterModule,
-    MatSnackBarModule,
-    NavigationComponent
-  ],
-  template: `
-    <div *ngIf="isLoggedIn">
-      <app-navigation>
-        <router-outlet></router-outlet>
-      </app-navigation>
-    </div>
-    
-    <div *ngIf="!isLoggedIn">
-      <router-outlet></router-outlet>
-    </div>
-  `,
-  styles: []
+  imports: [CommonModule, RouterOutlet],
+  template: `<router-outlet></router-outlet>`,
+  styles: [`
+    :host {
+      display: block;
+      height: 100%;
+    }
+  `]
 })
 export class AppComponent implements OnInit {
-  isLoggedIn = false;
-  
   constructor(private authService: AuthService) {}
   
   ngOnInit() {
-    this.authService.user$.subscribe(user => {
-      this.isLoggedIn = !!user;
-      
-    });
+    // Initialize auth state
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      this.authService.loadCurrentUser().subscribe();
+    }
   }
 }

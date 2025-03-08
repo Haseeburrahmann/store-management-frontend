@@ -1,53 +1,20 @@
 // src/app/core/auth/guards/auth.guard.ts
+import { inject } from '@angular/core';
+import { CanActivateFn, Router, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
+import { AuthService } from '../../../core/services/auth.service';
 
-import { Injectable } from '@angular/core';
-import { Router, CanActivate, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
-import { Observable, map, of } from 'rxjs';
-import { AuthService } from '../../services/auth.service';
-
-@Injectable({
-  providedIn: 'root'
-})
-export class AuthGuard implements CanActivate {
+export const authGuard: CanActivateFn = (
+  route: ActivatedRouteSnapshot, 
+  state: RouterStateSnapshot
+) => {
+  const authService = inject(AuthService);
+  const router = inject(Router);
   
-  constructor(private authService: AuthService, private router: Router) { }
-  
-  canActivate(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): boolean | Observable<boolean> {
-    if (this.authService.isAuthenticated()) {
-      // Check for required permissions if specified
-      const requiredPermission = route.data['permission'] as string;
-      
-      if (requiredPermission) {
-        // If permission is in format "area:action"
-        if (requiredPermission.includes(':') && !requiredPermission.includes('PermissionArea')) {
-          const [area, action] = requiredPermission.split(':');
-          if (!this.authService.hasPermission(area, action)) {
-            console.warn(`Access denied: Missing permission ${requiredPermission}`);
-            
-            // Return to dashboard instead of abruptly failing
-            this.router.navigate(['/dashboard']);
-            return false;
-          }
-        } 
-        // If permission is in enum format or legacy format
-        else {
-          // Use the legacy method for backward compatibility
-          if (!this.authService.hasPermissionLegacy(requiredPermission)) {
-            console.warn(`Access denied: Missing permission ${requiredPermission}`);
-            this.router.navigate(['/dashboard']);
-            return false;
-          }
-        }
-      }
-      
-      return true;
-    }
-    
-    // Not logged in, redirect to login page with return URL
-    this.router.navigate(['/login'], { 
-      queryParams: { returnUrl: state.url }
-    });
-    
-    return false;
+  if (authService.isAuthenticated) {
+    return true;
   }
-}
+  
+  // Not authenticated, redirect to login
+  router.navigate(['/auth/login'], { queryParams: { returnUrl: state.url } });
+  return false;
+};

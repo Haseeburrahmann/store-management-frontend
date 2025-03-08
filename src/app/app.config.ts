@@ -1,50 +1,38 @@
 // src/app/app.config.ts
-
-import { ApplicationConfig, inject } from '@angular/core';
+import { ApplicationConfig, ErrorHandler } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideAnimations } from '@angular/platform-browser/animations';
-import { MAT_DIALOG_DEFAULT_OPTIONS } from '@angular/material/dialog';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { MAT_SNACK_BAR_DEFAULT_OPTIONS } from '@angular/material/snack-bar';
+import { MAT_DIALOG_DEFAULT_OPTIONS } from '@angular/material/dialog';
 
 import { routes } from './app.routes';
-import { CacheService } from './core/services/cache.service';
-import { AuthService } from './core/services/auth.service';
-import { NotificationService } from './core/services/notification.service';
-import { Router } from '@angular/router';
-
-// Custom interceptor functions
-export function errorInterceptorFn(req: any, next: any) {
-  const authService = inject(AuthService);
-  const router = inject(Router);
-  const notificationService = inject(NotificationService);
-  
-  // Implement error interceptor logic here
-  return next(req).pipe(
-    // Add your error handling logic here
-  );
-}
-
-export function cacheInterceptorFn(req: any, next: any) {
-  const cacheService = inject(CacheService);
-  
-  // Only cache GET requests
-  if (req.method !== 'GET') {
-    return next(req);
-  }
-  
-  // Implement cache interceptor logic here
-  return next(req);
-}
+import { GlobalErrorHandler } from './core/utils/error-handler';
+import { authInterceptor } from './core/interceptors/auth.interceptor';
+import { errorInterceptor } from './core/interceptors/error.interceptor';
+import { cacheInterceptor } from './core/interceptors/cache.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideRouter(routes),
-    provideHttpClient(
-      // Temporarily disabling interceptors until they are properly implemented
-      // withInterceptors([errorInterceptorFn, cacheInterceptorFn])
-    ),
     provideAnimations(),
+    
+    // Use functional interceptors instead of class-based
+    provideHttpClient(
+      withInterceptors([
+        authInterceptor,
+        errorInterceptor,
+        cacheInterceptor
+      ])
+    ),
+    
+    // Error Handler
+    {
+      provide: ErrorHandler,
+      useClass: GlobalErrorHandler
+    },
+    
+    // Material Design default configurations
     {
       provide: MAT_SNACK_BAR_DEFAULT_OPTIONS,
       useValue: {
@@ -57,9 +45,9 @@ export const appConfig: ApplicationConfig = {
       provide: MAT_DIALOG_DEFAULT_OPTIONS,
       useValue: {
         hasBackdrop: true,
-        disableClose: false,
-        width: '500px'
+        disableClose: true,
+        width: '400px'
       }
     }
-  ]
+  ],
 };

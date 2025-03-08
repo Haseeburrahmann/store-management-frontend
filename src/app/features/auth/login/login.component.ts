@@ -1,82 +1,109 @@
-import { Component } from '@angular/core';
-import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
-import { Router, ActivatedRoute } from '@angular/router';
+// src/app/features/auth/login/login.component.ts
+import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { Router, ActivatedRoute, RouterModule } from '@angular/router';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, AbstractControl } from '@angular/forms';
+import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 import { AuthService } from '../../../core/services/auth.service';
+import { NotificationService } from '../../../core/services/notification.service';
+import { ErrorDisplayComponent } from '../../../shared/components/error-display/error-display.component';
 
 @Component({
   selector: 'app-login',
   standalone: true,
   imports: [
     CommonModule,
+    RouterModule,
     ReactiveFormsModule,
+    MatCardModule,
     MatFormFieldModule,
     MatInputModule,
     MatButtonModule,
-    MatCardModule,
-    MatProgressBarModule,
-    RouterModule
+    MatIconModule,
+    MatProgressSpinnerModule,
+    ErrorDisplayComponent
   ],
   template: `
-    <div class="login-container">
-      <mat-card class="login-card">
-        <mat-card-header>
-          <mat-card-title>Login</mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
-          <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
-            <div class="form-field-container">
-              <mat-form-field appearance="outline" class="full-width">
+    <div class="auth-container">
+      <div class="auth-card-wrapper">
+        <mat-card class="auth-card">
+          <mat-card-header>
+            <mat-card-title>Store Management System</mat-card-title>
+            <mat-card-subtitle>Login to your account</mat-card-subtitle>
+          </mat-card-header>
+          
+          <mat-card-content>
+            <app-error-display
+              [visible]="error !== ''"
+              [message]="error"
+              type="error">
+            </app-error-display>
+            
+            <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="login-form">
+              <mat-form-field appearance="outline" class="form-field">
                 <mat-label>Email</mat-label>
-                <input matInput formControlName="email" type="email" required>
-                @if (loginForm.get('email')?.invalid && loginForm.get('email')?.touched) {
-                  <mat-error>Valid email is required</mat-error>
-                }
+                <input 
+                  matInput 
+                  formControlName="email" 
+                  placeholder="Enter your email"
+                  autocomplete="email"
+                  required>
+                <mat-icon matSuffix>email</mat-icon>
+                <mat-error *ngIf="f['email']?.errors?.['required']">Email is required</mat-error>
+                <mat-error *ngIf="f['email']?.errors?.['email']">Please enter a valid email</mat-error>
               </mat-form-field>
               
-              <mat-form-field appearance="outline" class="full-width">
+              <mat-form-field appearance="outline" class="form-field">
                 <mat-label>Password</mat-label>
-                <input matInput formControlName="password" type="password" required>
-                @if (loginForm.get('password')?.invalid && loginForm.get('password')?.touched) {
-                  <mat-error>Password is required</mat-error>
-                }
+                <input 
+                  matInput 
+                  [type]="hidePassword ? 'password' : 'text'" 
+                  formControlName="password"
+                  placeholder="Enter your password"
+                  autocomplete="current-password"
+                  required>
+                <button 
+                  type="button"
+                  mat-icon-button 
+                  matSuffix 
+                  (click)="hidePassword = !hidePassword">
+                  <mat-icon>{{hidePassword ? 'visibility_off' : 'visibility'}}</mat-icon>
+                </button>
+                <mat-error *ngIf="f['password']?.errors?.['required']">Password is required</mat-error>
               </mat-form-field>
-            </div>
-            
-            @if (error) {
-              <div class="error-message">
-                {{ error }}
+              
+              <div class="form-actions">
+                <button 
+                  mat-flat-button 
+                  color="primary" 
+                  type="submit"
+                  [disabled]="loading || loginForm.invalid"
+                  class="submit-button">
+                  <mat-spinner diameter="20" *ngIf="loading"></mat-spinner>
+                  <span *ngIf="!loading">Login</span>
+                </button>
               </div>
-            }
-            
-            <div class="actions">
-              <button mat-raised-button color="primary" type="submit" [disabled]="loginForm.invalid || isLoading">
-                @if (isLoading) {
-                  Logging in...
-                } @else {
-                  Login
-                }
-              </button>
-              <a mat-button routerLink="/register">Register</a>
-            </div>
-            
-            @if (isLoading) {
-              <mat-progress-bar mode="indeterminate" class="mt-3"></mat-progress-bar>
-            }
-          </form>
-        </mat-card-content>
-      </mat-card>
+            </form>
+          </mat-card-content>
+          
+          <mat-card-actions align="end">
+            <span class="register-prompt">
+              Don't have an account?
+              <a routerLink="/auth/register">Register</a>
+            </span>
+          </mat-card-actions>
+        </mat-card>
+      </div>
     </div>
   `,
   styles: [`
-    .login-container {
+    .auth-container {
       display: flex;
       justify-content: center;
       align-items: center;
@@ -84,89 +111,116 @@ import { AuthService } from '../../../core/services/auth.service';
       background-color: #f5f5f5;
     }
     
-    .login-card {
-      width: 400px;
-      max-width: 90%;
-      padding: 20px;
+    .auth-card-wrapper {
+      width: 100%;
+      max-width: 400px;
+      padding: 16px;
     }
     
-    .form-field-container {
+    .auth-card {
+      width: 100%;
+    }
+    
+    .login-form {
       display: flex;
       flex-direction: column;
-      margin-bottom: 20px;
+      margin-top: 16px;
     }
     
-    .full-width {
+    .form-field {
       width: 100%;
-      margin-bottom: 15px;
+      margin-bottom: 16px;
     }
     
-    .actions {
+    .form-actions {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-top: 20px;
+      justify-content: flex-end;
+      margin-top: 16px;
     }
     
-    .error-message {
-      color: #f44336;
-      margin-top: 10px;
+    .submit-button {
+      min-width: 120px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .register-prompt {
+      margin-right: 16px;
       font-size: 14px;
     }
     
-    mat-card-header {
-      margin-bottom: 20px;
-    }
-    
-    .mt-3 {
-      margin-top: 15px;
+    @media (max-width: 600px) {
+      .auth-card-wrapper {
+        padding: 8px;
+        max-width: 100%;
+      }
     }
   `]
 })
-export class LoginComponent {
-  loginForm: FormGroup;
-  error: string = '';
-  isLoading: boolean = false;
-  returnUrl: string = '/dashboard';
+export class LoginComponent implements OnInit {
+  loginForm!: FormGroup;
+  loading = false;
+  error = '';
+  hidePassword = true;
+  returnUrl: string = '/';
   
   constructor(
-    private fb: FormBuilder,
-    private authService: AuthService,
+    private formBuilder: FormBuilder,
+    private route: ActivatedRoute,
     private router: Router,
-    private route: ActivatedRoute
-  ) {
-    this.loginForm = this.fb.group({
+    private authService: AuthService,
+    private notificationService: NotificationService
+  ) {}
+  
+  ngOnInit() {
+    this.loginForm = this.formBuilder.group({
       email: ['', [Validators.required, Validators.email]],
       password: ['', Validators.required]
     });
     
-    // Get return URL from route parameters or default to '/dashboard'
-    this.returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/dashboard';
-  }
-  
-  onSubmit(): void {
-    if (this.loginForm.valid) {
-      const { email, password } = this.loginForm.value;
-      
-      this.isLoading = true;
-      this.error = '';
-      
-      this.authService.login(email, password).subscribe({
-        next: () => {
-          this.isLoading = false;
-          this.router.navigateByUrl(this.returnUrl);
-        },
-        error: (err) => {
-          this.isLoading = false;
-          // Use the standardized error handling format
-          if (err instanceof Error) {
-            this.error = err.message;
-          } else {
-            this.error = 'Invalid email or password';
-          }
-          console.error('Login error:', err);
-        }
-      });
+    // Get return URL from query params or default to home page
+    this.returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/';
+    
+    // Redirect if already logged in
+    if (this.authService.isAuthenticated) {
+      this.router.navigate([this.returnUrl]);
     }
   }
+  
+  // Convenience getter for easy access to form fields
+  get f(): { [key: string]: AbstractControl } { 
+    return this.loginForm.controls; 
+  }
+  
+  onSubmit() {
+    console.log('Login attempt with:', {
+      email: this.f['email'].value,
+      passwordLength: this.f['password'].value.length
+    });
+    // Stop here if form is invalid
+    if (this.loginForm.invalid) {
+      return;
+    }
+    
+    this.loading = true;
+    this.error = '';
+    
+    this.authService.login(
+      this.f['email'].value,
+      this.f['password'].value
+    ).subscribe({
+      next: () => {
+        this.notificationService.success('Login successful');
+        this.router.navigate([this.returnUrl]);
+      },
+      error: err => {
+        this.error = err.message || 'Invalid email or password';
+        this.loading = false;
+      }
+    });
+  }
+
+  
+  
 }

@@ -1,33 +1,13 @@
-// src/app/shared/components/data-table/data-table.component.ts
-import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild, OnInit, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatTableModule, MatTable } from '@angular/material/table';
-import { MatSortModule, MatSort, Sort } from '@angular/material/sort';
-import { MatPaginatorModule, MatPaginator, PageEvent } from '@angular/material/paginator';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTableModule, MatTableDataSource } from '@angular/material/table';
+import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
+import { MatSort, MatSortModule } from '@angular/material/sort';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
-import { SelectionModel } from '@angular/cdk/collections';
-import { MatCheckboxModule } from '@angular/material/checkbox';
-import { IconService } from '../../../core/services/icon.service';
-
-export interface TableColumn {
-  name: string;       // Internal column name
-  label: string;      // Display label
-  property: string;   // Property path in data object
-  type: 'text' | 'number' | 'date' | 'boolean' | 'icon' | 'custom'; // Column data type
-  sortable?: boolean; // Whether column is sortable
-  filterable?: boolean; // Whether column is filterable
-  visible?: boolean;  // Whether column is visible
-  sticky?: boolean;   // Whether column is sticky
-  width?: string;     // Column width (e.g., '100px')
-  align?: 'left' | 'center' | 'right'; // Text alignment
-  format?: (value: any) => any; // Optional formatter function
-  tooltip?: string;   // Tooltip for column header
-  icon?: string;      // Icon for icon type columns
-  iconColor?: string; // Icon color for icon type columns
-}
 
 @Component({
   selector: 'app-data-table',
@@ -35,396 +15,269 @@ export interface TableColumn {
   imports: [
     CommonModule,
     MatTableModule,
-    MatSortModule,
     MatPaginatorModule,
-    MatProgressSpinnerModule,
+    MatSortModule,
+    MatFormFieldModule,
+    MatInputModule,
     MatIconModule,
     MatButtonModule,
-    MatMenuModule,
-    MatCheckboxModule
+    MatMenuModule
   ],
   template: `
-    <div class="data-table-container">
-      <!-- Loading spinner -->
-      <div *ngIf="loading" class="loading-shade">
-        <mat-spinner diameter="40"></mat-spinner>
+    <div class="table-container">
+      <div class="table-header" *ngIf="showFilter">
+      <mat-form-field appearance="outline">
+  <mat-label>Filter</mat-label>
+  <input matInput #filterInput (keyup)="applyFilter($event)" placeholder="Filter data">
+  <mat-icon matSuffix>search</mat-icon>
+</mat-form-field>
       </div>
       
-      <!-- Empty state -->
-      <div *ngIf="!loading && data?.length === 0" class="empty-state">
-        <mat-icon>{{ emptyStateIcon }}</mat-icon>
-        <h3>{{ emptyStateMessage }}</h3>
-        <p *ngIf="emptyStateDescription">{{ emptyStateDescription }}</p>
-        <button 
-          *ngIf="emptyStateAction" 
-          mat-flat-button 
-          color="primary" 
-          (click)="emptyStateActionClick.emit()">
-          {{ emptyStateAction }}
-        </button>
-      </div>
-      
-      <!-- Table -->
-      <div class="table-wrapper" [class.empty]="!loading && data?.length === 0">
-        <table mat-table 
-               [dataSource]="data" 
-               matSort 
-               [matSortActive]="defaultSort.active"
-               [matSortDirection]="defaultSort.direction"
-               [matSortDisableClear]="true"
-               (matSortChange)="onSortChange($event)"
-               class="data-table">
+      <table mat-table [dataSource]="dataSource" matSort class="mat-elevation-z0">
+        
+        <!-- Dynamic columns based on the column definitions -->
+        <ng-container *ngFor="let column of columns" [matColumnDef]="column.name">
+          <!-- Header cell -->
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [disabled]="!column.sortable">
+            {{ column.label }}
+          </th>
           
-          <!-- Selection column -->
-          <ng-container *ngIf="selectable" matColumnDef="select">
-            <th mat-header-cell *matHeaderCellDef>
-              <mat-checkbox 
-                [checked]="selection.hasValue() && isAllSelected()"
-                [indeterminate]="selection.hasValue() && !isAllSelected()"
-                (change)="$event ? masterToggle() : null">
-              </mat-checkbox>
-            </th>
-            <td mat-cell *matCellDef="let row">
-              <mat-checkbox 
-                [checked]="selection.isSelected(row)"
-                (change)="$event ? selection.toggle(row) : null"
-                (click)="$event.stopPropagation()">
-              </mat-checkbox>
-            </td>
-          </ng-container>
-          
-          <!-- Dynamic columns -->
-          <ng-container *ngFor="let column of visibleColumns" [matColumnDef]="column.name">
-            <!-- Header -->
-            <th mat-header-cell 
-                *matHeaderCellDef 
-                [mat-sort-header]="column.sortable ? column.name : ''"
-                [disabled]="!column.sortable"
-                [style.width]="column.width || 'auto'"
-                [style.text-align]="column.align || 'left'">
-              {{ column.label }}
-            </th>
-            
-            <!-- Cell -->
-            <td mat-cell 
-                *matCellDef="let element" 
-                [style.text-align]="column.align || 'left'">
+          <!-- Regular cell -->
+          <td mat-cell *matCellDef="let row">
+            <!-- Different cell content based on column type -->
+            <ng-container [ngSwitch]="column.type">
               
-              <!-- Text -->
-              <ng-container *ngIf="column.type === 'text'">
-                {{ getValue(element, column) }}
-              </ng-container>
+              <!-- Date column -->
+              <span *ngSwitchCase="'date'">
+                {{ row[column.name] | date: column.format || 'MMM d, y' }}
+              </span>
               
-              <!-- Number -->
-              <ng-container *ngIf="column.type === 'number'">
-                {{ getValue(element, column) | number }}
-              </ng-container>
+              <!-- Boolean column -->
+              <span *ngSwitchCase="'boolean'">
+                <mat-icon *ngIf="row[column.name]" color="primary">check_circle</mat-icon>
+                <mat-icon *ngIf="!row[column.name]" color="warn">cancel</mat-icon>
+              </span>
               
-              <!-- Date -->
-              <ng-container *ngIf="column.type === 'date'">
-                {{ getValue(element, column) | date:'medium' }}
-              </ng-container>
+              <!-- Status column -->
+              <span *ngSwitchCase="'status'" class="status-badge" [ngClass]="'status-' + row[column.name]">
+                {{ row[column.name] }}
+              </span>
               
-              <!-- Boolean -->
-              <ng-container *ngIf="column.type === 'boolean'">
-                <mat-icon *ngIf="getValue(element, column)">check</mat-icon>
-                <mat-icon *ngIf="!getValue(element, column)">close</mat-icon>
-              </ng-container>
-              
-              <!-- Icon -->
-              <ng-container *ngIf="column.type === 'icon'">
-                <mat-icon [style.color]="column.iconColor">
-                  {{ column.icon || getValue(element, column) }}
-                </mat-icon>
-              </ng-container>
-              
-              <!-- Custom - Use content projection for custom cells -->
-              <ng-container *ngIf="column.type === 'custom'">
-                <!-- We'll use content projection instead of templateOutlet -->
-                <span class="custom-cell-placeholder" [attr.data-column]="column.name" [attr.data-row-id]="element[trackBy]">
-                  {{ getValue(element, column) }}
-                </span>
-              </ng-container>
-            </td>
-          </ng-container>
-          
-          <!-- Actions Column -->
-          <ng-container *ngIf="showActions" matColumnDef="actions">
-            <th mat-header-cell *matHeaderCellDef [style.width]="actionsColumnWidth">Actions</th>
-            <td mat-cell *matCellDef="let element">
-              <!-- Action Buttons -->
-              <div class="action-buttons">
-                <button *ngIf="actions.includes('view')" 
-                      mat-icon-button 
-                      color="primary"
-                      (click)="onActionClick('view', element)"
-                      matTooltip="View Details">
-                  <mat-icon>{{ iconService.getActionIcon('view') }}</mat-icon>
+              <!-- Actions column -->
+              <div *ngSwitchCase="'actions'" class="actions-cell">
+                <button mat-icon-button [matMenuTriggerFor]="menu" aria-label="Actions">
+                  <mat-icon>more_vert</mat-icon>
                 </button>
-                
-                <button *ngIf="actions.includes('edit')" 
-                      mat-icon-button 
-                      color="primary"
-                      (click)="onActionClick('edit', element)"
-                      matTooltip="Edit">
-                  <mat-icon>{{ iconService.getActionIcon('edit') }}</mat-icon>
-                </button>
-                
-                <button *ngIf="actions.includes('delete')" 
-                      mat-icon-button 
-                      color="warn"
-                      (click)="onActionClick('delete', element)"
-                      matTooltip="Delete">
-                  <mat-icon>{{ iconService.getActionIcon('delete') }}</mat-icon>
-                </button>
-                
-                <!-- More actions menu -->
-                <button *ngIf="moreActions?.length" 
-                      mat-icon-button 
-                      [matMenuTriggerFor]="moreMenu">
-                  <mat-icon>{{ iconService.getActionIcon('more') }}</mat-icon>
-                </button>
-                
-                <mat-menu #moreMenu="matMenu">
-                  <button *ngFor="let action of moreActions" 
-                         mat-menu-item
-                         (click)="onActionClick(action.value, element)">
-                    <mat-icon *ngIf="action.icon">{{ action.icon }}</mat-icon>
-                    <span>{{ action.label }}</span>
+                <mat-menu #menu="matMenu">
+                  <button mat-menu-item *ngIf="showViewAction" (click)="onView(row)">
+                    <mat-icon>visibility</mat-icon>
+                    <span>View</span>
                   </button>
+                  <button mat-menu-item *ngIf="showEditAction" (click)="onEdit(row)">
+                    <mat-icon>edit</mat-icon>
+                    <span>Edit</span>
+                  </button>
+                  <button mat-menu-item *ngIf="showDeleteAction" (click)="onDelete(row)">
+                    <mat-icon>delete</mat-icon>
+                    <span>Delete</span>
+                  </button>
+                  <ng-content select="[extraActions]"></ng-content>
                 </mat-menu>
               </div>
-            </td>
-          </ng-container>
-          
-          <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: stickyHeader"></tr>
-          <tr mat-row 
-              *matRowDef="let row; columns: displayedColumns;"
-              [class.selected]="selection.isSelected(row)"
-              (click)="onRowClick(row)"></tr>
-        </table>
-      </div>
+              
+              <!-- Default column (text) -->
+              <span *ngSwitchDefault>{{ row[column.name] }}</span>
+              
+            </ng-container>
+          </td>
+        </ng-container>
+        
+        <!-- Empty state -->
+        <tr class="mat-row" *matNoDataRow>
+  <td class="mat-cell empty-table" [attr.colspan]="columns.length">
+    <div *ngIf="getFilterValue(); else noData">
+      No data matching the filter "{{getFilterValue()}}"
+    </div>
+    <ng-template #noData>
+      <div>{{ emptyMessage }}</div>
+    </ng-template>
+  </td>
+</tr>
+        
+        <!-- Table header and rows -->
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr 
+          mat-row 
+          *matRowDef="let row; columns: displayedColumns;"
+          [ngClass]="{'clickable-row': rowClickable}"
+          (click)="onRowClick(row)"
+        ></tr>
+      </table>
       
-      <!-- Pagination -->
-      <mat-paginator *ngIf="showPagination"
-                   [length]="totalItems"
-                   [pageSize]="pageSize"
-                   [pageSizeOptions]="pageSizeOptions"
-                   [showFirstLastButtons]="true"
-                   (page)="onPageChange($event)">
+      <mat-paginator 
+        *ngIf="showPaginator"
+        [pageSizeOptions]="pageSizeOptions" 
+        [pageSize]="pageSize"
+        showFirstLastButtons
+        aria-label="Select page">
       </mat-paginator>
     </div>
   `,
   styles: [`
-    .data-table-container {
-      position: relative;
+    .table-container {
       width: 100%;
-      overflow: hidden;
-      border-radius: 4px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      overflow: auto;
     }
     
-    .loading-shade {
-      position: absolute;
-      top: 0;
-      left: 0;
-      bottom: 0;
-      right: 0;
-      background: rgba(0, 0, 0, 0.05);
-      z-index: 2;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    
-    .table-wrapper {
-      overflow-x: auto;
-      max-width: 100%;
-    }
-    
-    .table-wrapper.empty {
-      display: none;
-    }
-    
-    .data-table {
-      width: 100%;
-    }
-    
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 20px;
-      text-align: center;
-    }
-    
-    .empty-state mat-icon {
-      font-size: 48px;
-      height: 48px;
-      width: 48px;
+    .table-header {
       margin-bottom: 16px;
-      color: rgba(0, 0, 0, 0.3);
     }
     
-    .empty-state h3 {
-      margin: 0 0 8px;
-      font-size: 18px;
-      font-weight: 500;
+    .mat-form-field {
+      width: 100%;
+      max-width: 500px;
     }
     
-    .empty-state p {
-      margin: 0 0 16px;
-      font-size: 14px;
-      color: rgba(0, 0, 0, 0.6);
-      max-width: 300px;
+    table {
+      width: 100%;
     }
     
-    .action-buttons {
-      display: flex;
-      align-items: center;
+    .clickable-row {
+      cursor: pointer;
     }
     
-    tr.selected {
-      background-color: rgba(var(--app-primary-rgb), 0.1);
+    .clickable-row:hover {
+      background-color: rgba(0, 0, 0, 0.04);
     }
     
-    :host-context(.dark-theme) {
-      .empty-state mat-icon {
-        color: rgba(255, 255, 255, 0.3);
-      }
-      
-      .empty-state p {
-        color: rgba(255, 255, 255, 0.6);
-      }
-      
-      .loading-shade {
-        background: rgba(255, 255, 255, 0.05);
-      }
-      
-      tr.selected {
-        background-color: rgba(var(--app-primary-rgb), 0.2);
-      }
+    .empty-table {
+      padding: 48px 0;
+      text-align: center;
+      color: #666;
+      font-style: italic;
+    }
+    
+    .status-badge {
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      text-transform: capitalize;
+    }
+    
+    .status-active {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+    }
+    
+    .status-pending {
+      background-color: #fff8e1;
+      color: #f57f17;
+    }
+    
+    .status-inactive,
+    .status-terminated {
+      background-color: #ffebee;
+      color: #c62828;
+    }
+    
+    .status-on_leave {
+      background-color: #e3f2fd;
+      color: #1565c0;
+    }
+    
+    .status-approved {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+    }
+    
+    .status-rejected {
+      background-color: #ffebee;
+      color: #c62828;
     }
   `]
 })
-export class DataTableComponent implements OnInit, OnChanges {
-  @Input() data: any[] = [];
-  @Input() columns: TableColumn[] = [];
-  @Input() loading: boolean = false;
-  @Input() showPagination: boolean = true;
-  @Input() pageSize: number = 10;
-  @Input() pageSizeOptions: number[] = [5, 10, 25, 50];
-  @Input() totalItems: number = 0;
-  @Input() stickyHeader: boolean = false;
-  @Input() showActions: boolean = true;
-  @Input() actions: string[] = ['view', 'edit', 'delete'];
-  @Input() moreActions: {label: string, value: string, icon?: string}[] = [];
-  @Input() actionsColumnWidth: string = '120px';
-  @Input() selectable: boolean = false;
-  @Input() trackBy: string = 'id';
-  @Input() defaultSort: {
-    active: string;
-    direction: 'asc' | 'desc';
-  } = { active: 'id', direction: 'desc' };
+export class DataTableComponent implements OnInit {
+[x: string]: any;
+  @Input() columns: Array<{
+    name: string;
+    label: string;
+    type?: 'text' | 'date' | 'boolean' | 'status' | 'actions';
+    format?: string;
+    sortable?: boolean;
+  }> = [];
   
-  @Input() emptyStateIcon: string = 'table_chart';
-  @Input() emptyStateMessage: string = 'No data available';
-  @Input() emptyStateDescription: string = '';
-  @Input() emptyStateAction: string = '';
+  @Input() data: any[] = [];
+  @Input() showFilter = true;
+  @Input() showPaginator = true;
+  @Input() pageSize = 10;
+  @Input() pageSizeOptions: number[] = [5, 10, 25, 50];
+  @Input() emptyMessage = 'No data available';
+  @Input() rowClickable = false;
+  
+  @Input() showViewAction = true;
+  @Input() showEditAction = true;
+  @Input() showDeleteAction = true;
   
   @Output() rowClick = new EventEmitter<any>();
-  @Output() actionClick = new EventEmitter<{action: string, item: any}>();
-  @Output() sortChange = new EventEmitter<Sort>();
-  @Output() pageChange = new EventEmitter<PageEvent>();
-  @Output() selectionChange = new EventEmitter<any[]>();
-  @Output() emptyStateActionClick = new EventEmitter<void>();
+  @Output() viewItem = new EventEmitter<any>();
+  @Output() editItem = new EventEmitter<any>();
+  @Output() deleteItem = new EventEmitter<any>();
   
-  @ViewChild(MatSort) sort!: MatSort;
   @ViewChild(MatPaginator) paginator!: MatPaginator;
-  @ViewChild(MatTable) table!: MatTable<any>;
+  @ViewChild(MatSort) sort!: MatSort;
   
+  dataSource = new MatTableDataSource<any>([]);
   displayedColumns: string[] = [];
-  visibleColumns: TableColumn[] = [];
-  selection = new SelectionModel<any>(true, []);
   
-  constructor(public iconService: IconService) {}
-  
-  ngOnInit(): void {
-    this.updateVisibleColumns();
+  ngOnInit() {
+    // Set displayed columns from column definitions
+    this.displayedColumns = this.columns.map(col => col.name);
+    
+    // Initialize data source
+    this.dataSource = new MatTableDataSource(this.data);
   }
   
-  ngOnChanges(changes: SimpleChanges): void {
-    if (changes['columns']) {
-      this.updateVisibleColumns();
-    }
+  ngAfterViewInit() {
+    // Connect paginator and sort to data source
+    this.dataSource.paginator = this.paginator;
+    this.dataSource.sort = this.sort;
   }
   
-  updateVisibleColumns(): void {
-    this.visibleColumns = this.columns.filter(column => column.visible !== false);
-    this.displayedColumns = [];
-    
-    if (this.selectable) {
-      this.displayedColumns.push('select');
-    }
-    
-    this.displayedColumns.push(...this.visibleColumns.map(column => column.name));
-    
-    if (this.showActions) {
-      this.displayedColumns.push('actions');
+  ngOnChanges() {
+    // Update data when input changes
+    if (this.dataSource) {
+      this.dataSource.data = this.data;
     }
   }
   
-  getValue(element: any, column: TableColumn): any {
-    // Handle nested properties (e.g., 'user.name')
-    const properties = column.property.split('.');
-    let value = element;
+  applyFilter(event: Event) {
+    const filterValue = (event.target as HTMLInputElement).value;
+    this.dataSource.filter = filterValue.trim().toLowerCase();
     
-    for (const prop of properties) {
-      if (value === null || value === undefined) return '';
-      value = value[prop];
+    if (this.dataSource.paginator) {
+      this.dataSource.paginator.firstPage();
     }
-    
-    // Apply formatter if provided
-    if (column.format && typeof column.format === 'function') {
-      return column.format(value);
-    }
-    
-    return value;
   }
   
-  onRowClick(row: any): void {
-    if (!this.selectable) {
+  onRowClick(row: any) {
+    if (this.rowClickable) {
       this.rowClick.emit(row);
     }
   }
   
-  onActionClick(action: string, item: any): void {
-    this.actionClick.emit({ action, item });
+  onView(row: any) {
+    this.viewItem.emit(row);
   }
   
-  onSortChange(sort: Sort): void {
-    this.sortChange.emit(sort);
+  onEdit(row: any) {
+    this.editItem.emit(row);
   }
   
-  onPageChange(event: PageEvent): void {
-    this.pageChange.emit(event);
-  }
-  
-  /** Whether the number of selected elements matches the total number of rows. */
-  isAllSelected(): boolean {
-    const numSelected = this.selection.selected.length;
-    const numRows = this.data.length;
-    return numSelected === numRows;
+  onDelete(row: any) {
+    this.deleteItem.emit(row);
   }
 
-  /** Selects all rows if they are not all selected; otherwise clear selection. */
-  masterToggle(): void {
-    if (this.isAllSelected()) {
-      this.selection.clear();
-    } else {
-      this.data.forEach(row => this.selection.select(row));
-    }
-    this.selectionChange.emit(this.selection.selected);
+  getFilterValue(): string {
+    return this['filterInput']?.nativeElement?.value || '';
   }
 }

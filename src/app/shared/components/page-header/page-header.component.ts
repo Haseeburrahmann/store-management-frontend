@@ -1,4 +1,3 @@
-// src/app/shared/components/page-header/page-header.component.ts
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
@@ -11,22 +10,30 @@ import { RouterModule } from '@angular/router';
   imports: [CommonModule, MatIconModule, MatButtonModule, RouterModule],
   template: `
     <div class="page-header">
-      <div class="header-left">
-        <button 
-          *ngIf="showBackButton" 
-          mat-icon-button 
-          class="back-button" 
-          (click)="onBackClick()"
-          aria-label="Go back">
-          <mat-icon>arrow_back</mat-icon>
-        </button>
-        <div class="title-container">
-          <h1 class="page-title">{{ title }}</h1>
-          <p *ngIf="subtitle" class="page-subtitle">{{ subtitle }}</p>
-        </div>
+      <div class="page-header-title">
+        <h1>{{ title }}</h1>
+        <p *ngIf="subtitle">{{ subtitle }}</p>
       </div>
-      <div class="header-actions">
+      
+      <div class="page-header-actions" *ngIf="showActions">
         <ng-content></ng-content>
+        
+        <button 
+          *ngIf="showAddButton"
+          mat-flat-button 
+          color="primary" 
+          [routerLink]="addButtonLink">
+          <mat-icon>add</mat-icon>
+          {{ addButtonText }}
+        </button>
+        
+        <button 
+          *ngIf="showBackButton"
+          mat-stroked-button 
+          [routerLink]="backButtonLink">
+          <mat-icon>arrow_back</mat-icon>
+          Back
+        </button>
       </div>
     </div>
   `,
@@ -37,62 +44,33 @@ import { RouterModule } from '@angular/router';
       align-items: center;
       margin-bottom: 24px;
       padding-bottom: 16px;
-      border-bottom: 1px solid rgba(0,0,0,0.12);
+      border-bottom: 1px solid #e0e0e0;
     }
     
-    .header-left {
-      display: flex;
-      align-items: center;
-    }
-    
-    .back-button {
-      margin-right: 16px;
-    }
-    
-    .title-container {
-      display: flex;
-      flex-direction: column;
-    }
-    
-    .page-title {
+    .page-header-title h1 {
       margin: 0;
-      font-size: 24px;
+      font-size: 28px;
       font-weight: 500;
-      color: var(--app-text);
     }
     
-    .page-subtitle {
+    .page-header-title p {
       margin: 4px 0 0;
-      font-size: 14px;
-      color: rgba(0,0,0,0.6);
+      color: #666;
     }
     
-    .header-actions {
+    .page-header-actions {
       display: flex;
-      gap: 8px;
-    }
-    
-    :host-context(.dark-theme) {
-      .page-header {
-        border-bottom-color: rgba(255,255,255,0.12);
-      }
-      
-      .page-subtitle {
-        color: rgba(255,255,255,0.7);
-      }
+      gap: 12px;
     }
   `]
 })
 export class PageHeaderComponent {
-  @Input() title: string = '';
-  @Input() subtitle: string = '';
-  @Input() showBackButton: boolean = false;
-  @Input() backRoute: string | any[] = ['..'];
-
-  constructor() {}
-
-  onBackClick(): void {
-    // The back navigation is handled by RouterModule and [routerLink]
-    // This method is provided for potential future custom handling
-  }
+  @Input() title = '';
+  @Input() subtitle = '';
+  @Input() showAddButton = false;
+  @Input() addButtonText = 'Add New';
+  @Input() addButtonLink = '';
+  @Input() showBackButton = false;
+  @Input() backButtonLink = '';
+  @Input() showActions = true;
 }
