@@ -1,297 +1,318 @@
 // src/app/features/user-management/user-detail/user-detail.component.ts
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { MatCardModule } from '@angular/material/card';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
-import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatIconModule } from '@angular/material/icon';
+import { MatChipsModule } from '@angular/material/chips';
+import { MatDialog } from '@angular/material/dialog';
+import { MatDividerModule } from '@angular/material/divider';
 
 import { UserService } from '../../../core/services/user.service';
-import { RoleService } from '../../../core/services/role.service';
+import { NotificationService } from '../../../core/services/notification.service';
 import { AuthService } from '../../../core/services/auth.service';
-import { User, UserCreate, UserUpdate } from '../../../core/auth/models/user.model';
-import { Role } from '../../../shared/models/role.model';
+import { PageHeaderComponent } from '../../../shared/components/page-header/page-header.component';
+import { CardContainerComponent } from '../../../shared/components/card-container/card-container.component';
+import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog.component';
+import { User } from '../../../shared/models/user.model';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+
 
 @Component({
   selector: 'app-user-detail',
   standalone: true,
   imports: [
     CommonModule,
-    ReactiveFormsModule,
-    MatCardModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatSelectModule,
+    RouterModule,
     MatButtonModule,
-    MatCheckboxModule,
-    MatSnackBarModule,
-    MatProgressSpinnerModule,
-    RouterModule
+    MatIconModule,
+    MatChipsModule,
+    MatDividerModule,
+    PageHeaderComponent,
+    CardContainerComponent,
+    MatProgressSpinnerModule
   ],
   template: `
-    <div class="container">
-      <mat-card>
-        <mat-card-header>
-          <mat-card-title>{{ isNewUser ? 'Create User' : 'Edit User' }}</mat-card-title>
-        </mat-card-header>
-        
-        <mat-card-content>
-          <div class="spinner-container" *ngIf="isLoading">
-            <mat-spinner diameter="40"></mat-spinner>
+    <div class="user-detail-container">
+      <app-page-header 
+        [title]="user?.full_name || 'User Details'" 
+        subtitle="User information and details"
+        [showBackButton]="true"
+        backButtonLink="/users"
+        [showAddButton]="false">
+        <button 
+          *ngIf="canEditUsers"
+          mat-flat-button 
+          color="primary" 
+          [routerLink]="['/users/edit', userId]">
+          <mat-icon>edit</mat-icon>
+          Edit User
+        </button>
+        <button 
+          *ngIf="canDeleteUsers && !isSelf"
+          mat-flat-button 
+          color="warn" 
+          (click)="confirmDelete()">
+          <mat-icon>delete</mat-icon>
+          Delete User
+        </button>
+      </app-page-header>
+      
+      <div class="user-content" *ngIf="user">
+        <app-card-container title="User Information">
+          <div class="user-info">
+            <div class="info-row">
+              <div class="info-label">Name</div>
+              <div class="info-value">{{ user.full_name }}</div>
+            </div>
+            
+            <mat-divider></mat-divider>
+            
+            <div class="info-row">
+              <div class="info-label">Email</div>
+              <div class="info-value">{{ user.email }}</div>
+            </div>
+            
+            <mat-divider></mat-divider>
+            
+            <div class="info-row">
+              <div class="info-label">Phone</div>
+              <div class="info-value">{{ user.phone_number || 'N/A' }}</div>
+            </div>
+            
+            <mat-divider></mat-divider>
+            
+            <div class="info-row">
+              <div class="info-label">Role</div>
+              <div class="info-value">{{ user.role_name || 'No Role' }}</div>
+            </div>
+            
+            <mat-divider></mat-divider>
+            
+            <div class="info-row">
+              <div class="info-label">Status</div>
+              <div class="info-value">
+                <span class="status-chip" [ngClass]="user.is_active ? 'active-chip' : 'inactive-chip'">
+                  {{ user.is_active ? 'Active' : 'Inactive' }}
+                </span>
+              </div>
+            </div>
+            
+            <mat-divider></mat-divider>
+            
+            <div class="info-row">
+              <div class="info-label">Created</div>
+              <div class="info-value">{{ user.created_at | date:'medium' }}</div>
+            </div>
+            
+            <mat-divider></mat-divider>
+            
+            <div class="info-row">
+              <div class="info-label">Last Updated</div>
+              <div class="info-value">{{ user.updated_at | date:'medium' }}</div>
+            </div>
           </div>
-          
-          <form [formGroup]="userForm" (ngSubmit)="onSubmit()" *ngIf="!isLoading">
-            <div class="form-row">
-              <mat-form-field appearance="outline" class="full-width">
-                <mat-label>Email</mat-label>
-                <input matInput formControlName="email" [readonly]="!isNewUser">
-                <mat-error *ngIf="userForm.get('email')?.hasError('required')">
-                  Email is required
-                </mat-error>
-                <mat-error *ngIf="userForm.get('email')?.hasError('email')">
-                  Please enter a valid email
-                </mat-error>
-              </mat-form-field>
+        </app-card-container>
+        
+        <app-card-container title="Permissions" *ngIf="user.permissions && user.permissions.length > 0">
+          <div class="permissions-list">
+            <div class="permission-chip" *ngFor="let permission of user.permissions">
+              {{ formatPermission(permission) }}
             </div>
-            
-            <div class="form-row">
-              <mat-form-field appearance="outline" class="full-width">
-                <mat-label>Full Name</mat-label>
-                <input matInput formControlName="full_name">
-                <mat-error *ngIf="userForm.get('full_name')?.hasError('required')">
-                  Full name is required
-                </mat-error>
-              </mat-form-field>
-            </div>
-            
-            <div class="form-row">
-              <mat-form-field appearance="outline" class="full-width">
-                <mat-label>Phone Number</mat-label>
-                <input matInput formControlName="phone_number">
-              </mat-form-field>
-            </div>
-            
-            <div class="form-row" *ngIf="isNewUser">
-              <mat-form-field appearance="outline" class="full-width">
-                <mat-label>Password</mat-label>
-                <input matInput type="password" formControlName="password">
-                <mat-error *ngIf="userForm.get('password')?.hasError('required')">
-                  Password is required
-                </mat-error>
-                <mat-error *ngIf="userForm.get('password')?.hasError('minlength')">
-                  Password must be at least 6 characters
-                </mat-error>
-              </mat-form-field>
-            </div>
-            
-            <div class="form-row">
-              <mat-form-field appearance="outline" class="full-width">
-                <mat-label>Role</mat-label>
-                <mat-select formControlName="role_id">
-                  <mat-option [value]="null">No Role</mat-option>
-                  <mat-option *ngFor="let role of roles" [value]="role._id">
-                    {{ role.name }}
-                  </mat-option>
-                </mat-select>
-              </mat-form-field>
-            </div>
-            
-            <div class="form-row">
-              <mat-checkbox formControlName="is_active">Active</mat-checkbox>
-            </div>
-            
-            <div class="error-message" *ngIf="error">
-              {{ error }}
-            </div>
-            
-            <div class="form-actions">
-              <button mat-button [routerLink]="['/users']">Cancel</button>
-              <button mat-raised-button color="primary" type="submit" [disabled]="userForm.invalid || isSaving">
-                {{ isSaving ? 'Saving...' : (isNewUser ? 'Create' : 'Update') }}
-              </button>
-            </div>
-          </form>
-        </mat-card-content>
-      </mat-card>
+          </div>
+        </app-card-container>
+      </div>
+      
+      <div class="loading-spinner" *ngIf="loading">
+        <mat-spinner></mat-spinner>
+      </div>
     </div>
   `,
   styles: [`
-    .container {
-      padding: 20px;
-      max-width: 800px;
-      margin: 0 auto;
+    .user-detail-container {
+      padding: 16px;
     }
     
-    .form-row {
-      margin-bottom: 20px;
-    }
-    
-    .full-width {
-      width: 100%;
-    }
-    
-    .form-actions {
+    .user-content {
       display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      margin-top: 20px;
+      flex-direction: column;
+      gap: 20px;
+      margin-top: 16px;
     }
     
-    .spinner-container {
+    .user-info {
+      padding: 8px 0;
+    }
+    
+    .info-row {
+      display: flex;
+      padding: 16px 0;
+    }
+    
+    .info-label {
+      font-weight: 500;
+      width: 150px;
+      color: #666;
+    }
+    
+    .info-value {
+      flex: 1;
+    }
+    
+    .permissions-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    
+    .permission-chip {
+      background-color: #e3f2fd;
+      color: #1565c0;
+      border-radius: 16px;
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    
+    .status-chip {
+      border-radius: 16px;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 500;
+      display: inline-block;
+    }
+    
+    .active-chip {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+    }
+    
+    .inactive-chip {
+      background-color: #ffebee;
+      color: #c62828;
+    }
+    
+    .loading-spinner {
       display: flex;
       justify-content: center;
-      align-items: center;
-      min-height: 300px;
-    }
-    
-    .error-message {
-      color: #f44336;
-      margin-top: 10px;
-      margin-bottom: 10px;
-      font-size: 14px;
+      margin-top: 48px;
     }
   `]
 })
 export class UserDetailComponent implements OnInit {
-  userForm!: FormGroup;
-  userId: string | null = null;
-  isNewUser = true;
-  isLoading = false;
-  isSaving = false;
-  error = '';
-  roles: Role[] = [];
+  userId: string = '';
+  user: User | null = null;
+  loading = false;
+  
+  get canEditUsers(): boolean {
+    return this.authService.hasPermission('users:write');
+  }
+  
+  get canDeleteUsers(): boolean {
+    return this.authService.hasPermission('users:delete');
+  }
+  
+  get isSelf(): boolean {
+    return this.user?._id === this.authService.currentUserValue?._id;
+  }
   
   constructor(
-    private fb: FormBuilder,
     private route: ActivatedRoute,
     private router: Router,
     private userService: UserService,
-    private roleService: RoleService,
     private authService: AuthService,
-    private snackBar: MatSnackBar
-  ) { }
+    private notificationService: NotificationService,
+    private dialog: MatDialog
+  ) {}
   
   ngOnInit(): void {
-    this.createForm();
-    this.loadRoles();
-    
-    this.userId = this.route.snapshot.paramMap.get('id');
-    
-    if (this.userId && this.userId !== 'new') {
-      this.isNewUser = false;
-      this.loadUser(this.userId);
-    }
-  }
-  
-  createForm(): void {
-    this.userForm = this.fb.group({
-      email: ['', [Validators.required, Validators.email]],
-      full_name: ['', Validators.required],
-      phone_number: [''],
-      password: ['', this.isNewUser ? [Validators.required, Validators.minLength(6)] : []],
-      role_id: [null],
-      is_active: [true]
-    });
-  }
-  
-  loadUser(userId: string): void {
-    this.isLoading = true;
-    this.error = '';
-    
-    this.userService.getUser(userId).subscribe({
-      next: (user) => {
-        this.userForm.patchValue({
-          email: user.email,
-          full_name: user.full_name,
-          phone_number: user.phone_number,
-          role_id: user.role_id,
-          is_active: user.is_active
-        });
-        
-        // Remove password validation for existing users
-        this.userForm.get('password')?.clearValidators();
-        this.userForm.get('password')?.updateValueAndValidity();
-        
-        this.isLoading = false;
-      },
-      error: (error) => {
-        this.isLoading = false;
-        this.error = error.message || 'Error loading user';
-        console.error('Error loading user', error);
-        this.snackBar.open('Error loading user: ' + this.error, 'Close', { duration: 3000 });
-      }
-    });
-  }
-  
-  loadRoles(): void {
-    this.roleService.getRoles().subscribe({
-      next: (roles) => {
-        this.roles = roles;
-      },
-      error: (error) => {
-        this.error = error.message || 'Error loading roles';
-        console.error('Error loading roles', error);
-        this.snackBar.open('Error loading roles: ' + this.error, 'Close', { duration: 3000 });
-      }
-    });
-  }
-  
-  onSubmit(): void {
-    if (this.userForm.invalid) return;
-    
-    this.isSaving = true;
-    this.error = '';
-    
-    const formData = { ...this.userForm.value };
-    
-    // Remove empty password for existing users
-    if (!this.isNewUser && !formData.password) {
-      delete formData.password;
-    }
-    
-    // Ensure role_id is a string or null
-    if (formData.role_id) {
-      formData.role_id = formData.role_id.toString();
-    }
-    
-    if (this.isNewUser) {
-      const userData: UserCreate = formData;
-      
-      this.userService.createUser(userData).subscribe({
-        next: () => {
-          this.isSaving = false;
-          this.snackBar.open('User created successfully', 'Close', { duration: 3000 });
-          this.router.navigate(['/users']);
-        },
-        error: (error) => {
-          this.isSaving = false;
-          this.error = error.message || 'Error creating user';
-          console.error('Error creating user', error);
-          this.snackBar.open('Error creating user: ' + this.error, 'Close', { duration: 3000 });
-        }
-      });
+    this.userId = this.route.snapshot.paramMap.get('id') || '';
+    if (this.userId) {
+      this.loadUser();
     } else {
-      const userData: UserUpdate = formData;
-      
-      this.userService.updateUser(this.userId!, userData).subscribe({
-        next: () => {
-          this.isSaving = false;
-          this.snackBar.open('User updated successfully', 'Close', { duration: 3000 });
-          this.router.navigate(['/users']);
-        },
-        error: (error) => {
-          this.isSaving = false;
-          this.error = error.message || 'Error updating user';
-          console.error('Error updating user', error);
-          this.snackBar.open('Error updating user: ' + this.error, 'Close', { duration: 3000 });
-        }
-      });
+      this.notificationService.error('User ID is required');
+      this.router.navigate(['/users']);
     }
+  }
+  
+  loadUser(): void {
+    this.loading = true;
+    
+    this.userService.getUser(this.userId).subscribe({
+      next: (user) => {
+        this.user = user;
+        this.loading = false;
+      },
+      error: (error) => {
+        this.notificationService.error('Failed to load user details');
+        this.loading = false;
+        this.router.navigate(['/users']);
+      }
+    });
+  }
+  
+  confirmDelete(): void {
+    if (this.isSelf) {
+      this.notificationService.error("You cannot delete your own account");
+      return;
+    }
+    
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Delete User',
+        message: `Are you sure you want to delete user ${this.user?.full_name}?`,
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
+        type: 'warning'
+      }
+    });
+    
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.deleteUser();
+      }
+    });
+  }
+  
+  deleteUser(): void {
+    if (!this.user) return;
+    
+    this.userService.deleteUser(this.user._id).subscribe({
+      next: (result) => {
+        if (result) {
+          this.notificationService.success(`User ${this.user?.full_name} deleted successfully`);
+          this.router.navigate(['/users']);
+        } else {
+          this.notificationService.error('Failed to delete user');
+        }
+      },
+      error: (error) => {
+        this.notificationService.error('Failed to delete user');
+      }
+    });
+  }
+  
+  formatPermission(permission: string): string {
+    const [area, action] = permission.split(':');
+    return `${this.capitalizeFirstLetter(area)} - ${this.formatAction(action)}`;
+  }
+  
+  formatAction(action: string): string {
+    switch (action) {
+      case 'read':
+        return 'View';
+      case 'write':
+        return 'Create/Edit';
+      case 'delete':
+        return 'Delete';
+      case 'approve':
+        return 'Approve';
+      default:
+        return this.capitalizeFirstLetter(action);
+    }
+  }
+  
+  capitalizeFirstLetter(str: string): string {
+    return str.charAt(0).toUpperCase() + str.slice(1);
   }
 }

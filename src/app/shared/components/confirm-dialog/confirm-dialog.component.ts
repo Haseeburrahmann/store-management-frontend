@@ -1,17 +1,15 @@
-// src/app/shared/components/confirm-dialog/confirm-dialog.component.ts
 import { Component, Inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 
 export interface ConfirmDialogData {
   title: string;
   message: string;
-  confirmText: string;
-  cancelText: string;
-  isWarning: boolean;
-  isError: boolean;
+  confirmText?: string;
+  cancelText?: string;
+  type?: 'warning' | 'error' | 'info';
 }
 
 @Component({
@@ -19,69 +17,49 @@ export interface ConfirmDialogData {
   standalone: true,
   imports: [CommonModule, MatDialogModule, MatButtonModule, MatIconModule],
   template: `
-    <div class="dialog-container" [ngClass]="{'warning': data.isWarning, 'error': data.isError}">
-      <div class="dialog-header">
-        <h2 mat-dialog-title>{{ data.title }}</h2>
-        <mat-icon *ngIf="data.isWarning && !data.isError">warning</mat-icon>
-        <mat-icon *ngIf="data.isError">error</mat-icon>
-      </div>
-      
-      <mat-dialog-content>
-        <p [innerHTML]="data.message"></p>
-      </mat-dialog-content>
-      
-      <mat-dialog-actions align="end">
-        <button mat-stroked-button [mat-dialog-close]="false">
-          {{ data.cancelText }}
-        </button>
-        <button 
-          mat-flat-button 
-          [color]="data.isError ? 'warn' : (data.isWarning ? 'accent' : 'primary')"
-          [mat-dialog-close]="true">
-          {{ data.confirmText }}
-        </button>
-      </mat-dialog-actions>
-    </div>
+    <h2 mat-dialog-title class="dialog-title">
+      <mat-icon class="dialog-icon" [ngClass]="data.type">{{ getIcon() }}</mat-icon>
+      {{ data.title }}
+    </h2>
+    
+    <mat-dialog-content class="dialog-content">
+      <p>{{ data.message }}</p>
+    </mat-dialog-content>
+    
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">
+        {{ data.cancelText || 'Cancel' }}
+      </button>
+      <button 
+        mat-flat-button 
+        [color]="getButtonColor()" 
+        (click)="onConfirm()">
+        {{ data.confirmText || 'Confirm' }}
+      </button>
+    </mat-dialog-actions>
   `,
   styles: [`
-    .dialog-container {
-      min-width: 350px;
-      max-width: 500px;
-    }
-    
-    .dialog-header {
+    .dialog-title {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      gap: 12px;
     }
     
-    .warning mat-icon {
-      color: var(--app-warning);
+    .dialog-icon {
+      color: #f44336;
     }
     
-    .error mat-icon {
-      color: var(--app-error);
+    .dialog-icon.warning {
+      color: #ff9800;
     }
     
-    mat-dialog-content {
-      margin: 16px 0;
-      max-height: 60vh;
-      overflow-y: auto;
+    .dialog-icon.info {
+      color: #2196f3;
     }
     
-    p {
-      font-size: 16px;
-      line-height: 1.5;
-      margin: 0;
-    }
-    
-    mat-dialog-actions {
-      padding: 16px 0 0;
-      margin-bottom: 0;
-    }
-    
-    button {
-      min-width: 100px;
+    .dialog-content {
+      padding: 20px 0;
+      min-width: 300px;
     }
   `]
 })
@@ -90,4 +68,37 @@ export class ConfirmDialogComponent {
     public dialogRef: MatDialogRef<ConfirmDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: ConfirmDialogData
   ) {}
+  
+  onConfirm(): void {
+    this.dialogRef.close(true);
+  }
+  
+  onCancel(): void {
+    this.dialogRef.close(false);
+  }
+  
+  getIcon(): string {
+    switch (this.data.type) {
+      case 'warning':
+        return 'warning';
+      case 'error':
+        return 'error';
+      case 'info':
+        return 'info';
+      default:
+        return 'help';
+    }
+  }
+  
+  getButtonColor(): string {
+    switch (this.data.type) {
+      case 'warning':
+      case 'error':
+        return 'warn';
+      case 'info':
+        return 'primary';
+      default:
+        return 'primary';
+    }
+  }
 }
