@@ -38,13 +38,13 @@ export const routes: Routes = [
         loadComponent: () => import('./features/users/profile/profile.component').then(m => m.ProfileComponent)
       },
       {
+        path: 'users',
+        loadChildren: () => import('./features/users/users.routes').then(m => m.USER_ROUTES),
+      },
+      {
         path: 'auth-test',
         loadComponent: () => import('./shared/components/auth-test/auth-test.component').then(m => m.AuthTestComponent)
       },
-      // {
-      //   path: 'users',
-      //   loadChildren: () => import('./features/users/users.routes').then(m => m.USER_ROUTES),
-      // },
       {
         path: 'access-denied',
         loadComponent: () => import('./features/auth/access-denied/access-denied.component').then(m => m.AccessDeniedComponent)
@@ -53,6 +53,10 @@ export const routes: Routes = [
         path: '',
         redirectTo: 'dashboard',
         pathMatch: 'full'
+      },
+      {
+        path: 'users',
+        loadChildren: () => import('./features/users/users.routes').then(m => m.USER_ROUTES)
       }
     ]
   },
