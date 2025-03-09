@@ -37,6 +37,10 @@ export const routes: Routes = [
         path: 'profile',
         loadComponent: () => import('./features/users/profile/profile.component').then(m => m.ProfileComponent)
       },
+      {
+        path: 'auth-test',
+        loadComponent: () => import('./shared/components/auth-test/auth-test.component').then(m => m.AuthTestComponent)
+      },
       // {
       //   path: 'users',
       //   loadChildren: () => import('./features/users/users.routes').then(m => m.USER_ROUTES),

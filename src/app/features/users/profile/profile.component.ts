@@ -114,7 +114,7 @@ import { User } from '../../../shared/models/user.model';
             <div class="mt-8 border-t border-[var(--border-color)] pt-6">
               <h3 class="text-lg font-semibold mb-4">Change Password</h3>
               
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <!-- <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="form-group">
                   <label for="current_password" class="form-label">Current Password</label>
                   <input 
@@ -129,7 +129,7 @@ import { User } from '../../../shared/models/user.model';
                   </div>
                 </div>
                 
-                <div></div> <!-- Empty div for grid alignment -->
+                <div></div> 
                 
                 <div class="form-group">
                   <label for="new_password" class="form-label">New Password</label>
@@ -160,7 +160,15 @@ import { User } from '../../../shared/models/user.model';
                     <div *ngIf="passwordMismatch">Passwords do not match</div>
                   </div>
                 </div>
-              </div>
+              </div> -->
+              <div class="mt-8 border-t pt-6">
+            <h2 class="text-lg font-semibold text-gray-700 mb-4">Account Information</h2>
+            
+            <div class="text-sm text-gray-600">
+              <p>Account created: {{ user?.created_at | date:'mediumDate' }}</p>
+              <p>Last updated: {{ user?.updated_at | date:'mediumDate' }}</p>
+            </div>
+            </div>
             </div>
             
             <div class="flex justify-end space-x-4 mt-6">
@@ -300,18 +308,19 @@ export class ProfileComponent implements OnInit {
   }
 
   private initForm(): void {
-    debugger;
     if (!this.user) return;
 
+    // Ensure we're correctly accessing the phone_number property
+    console.log('User data for form initialization:', this.user);
+    
     this.profileForm = this.formBuilder.group({
       full_name: [this.user.full_name, Validators.required],
       email: [this.user.email, [Validators.required, Validators.email]],
-      phone_number: [this.user.phone_number || ''],
-      // Password fields
-      current_password: [''],
-      new_password: ['', [Validators.minLength(8)]],
-      confirm_password: ['']
+      phone_number: [this.user.phone_number || '']
     });
+    
+    // Verify form values after initialization
+    console.log('Form values after initialization:', this.profileForm.value);
   }
 
   private determineRoleName(): void {

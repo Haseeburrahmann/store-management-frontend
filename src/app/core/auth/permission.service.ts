@@ -3,140 +3,58 @@ import { Injectable } from '@angular/core';
 import { AuthService } from './auth.service';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, of } from 'rxjs';
-import { catchError, filter, map, switchMap, tap } from 'rxjs/operators';
+import { catchError, filter, map, tap } from 'rxjs/operators';
 import { Role } from '../../shared/models/role.model';
-import { environment } from '../../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
 })
 export class PermissionService {
-  private userPermissionsSubject = new BehaviorSubject<string[]>([]);
+  public userPermissionsSubject = new BehaviorSubject<string[]>([]);
   public userPermissions$ = this.userPermissionsSubject.asObservable();
-  
-  // Flag to use hardcoded permissions (for development/testing)
-  private useHardcodedPermissions = !environment.production && environment.useHardcodedPermissions;
-  
-  // Hardcoded permission sets for testing purposes
-  private hardcodedPermissions = {
-    admin: [
-      'users:read', 'users:write', 'users:delete', 'users:approve',
-      'roles:read', 'roles:write', 'roles:delete', 'roles:approve',
-      'stores:read', 'stores:write', 'stores:delete', 'stores:approve',
-      'employees:read', 'employees:write', 'employees:delete', 'employees:approve',
-      'hours:read', 'hours:write', 'hours:delete', 'hours:approve',
-      'payments:read', 'payments:write', 'payments:delete', 'payments:approve',
-      'inventory:read', 'inventory:write', 'inventory:delete', 'inventory:approve',
-      'stock-requests:read', 'stock-requests:write', 'stock-requests:delete', 'stock-requests:approve',
-      'sales:read', 'sales:write', 'sales:delete', 'sales:approve',
-      'reports:read', 'reports:write', 'reports:delete', 'reports:approve'
-    ],
-    manager: [
-      'users:read',
-      'roles:read',
-      'stores:read', 'stores:write',
-      'employees:read', 'employees:write', 'employees:approve',
-      'hours:read', 'hours:write', 'hours:approve',
-      'payments:read', 'payments:write', 'payments:approve',
-      'inventory:read', 'inventory:write', 'inventory:approve',
-      'stock-requests:read', 'stock-requests:write', 'stock-requests:approve',
-      'sales:read', 'sales:write', 'sales:approve',
-      'reports:read'
-    ],
-    employee: [
-      'users:read',
-      'roles:read',
-      'stores:read',
-      'employees:read',
-      'hours:read', 'hours:write',
-      'payments:read',
-      'inventory:read',
-      'stock-requests:read', 'stock-requests:write',
-      'sales:read', 'sales:write'
-    ]
-  };
   
   constructor(
     private authService: AuthService,
     private http: HttpClient
   ) {
-    // Initialize permissions
+    console.log('Permission Service: Initializing');
+    
+    // Initialize permissions from current user if available
     this.initPermissions();
     
     // Subscribe to user changes to update permissions
     this.authService.currentUser$.pipe(
+      tap(user => {
+        console.log('Permission Service: User changed', user?.email);
+      }),
       filter(user => !!user)
     ).subscribe(user => {
-      this.updatePermissions(user?.role_id);
+      console.log('Permission Service: User has role_id', user?.role_id);
+      // Use permissions directly from the user object if available
+      if (user?.permissions) {
+        console.log('Permission Service: Using permissions from user object', user.permissions);
+        this.userPermissionsSubject.next(user.permissions);
+      } else {
+        console.log('Permission Service: No permissions in user object');
+        this.userPermissionsSubject.next([]);
+      }
     });
   }
   
   private initPermissions(): void {
+    console.log('Permission Service: Initializing permissions');
     const user = this.authService.currentUser;
     if (user) {
-      this.updatePermissions(user.role_id);
-    }
-  }
-  
-  private updatePermissions(roleId?: string): void {
-    if (!roleId) {
-      this.userPermissionsSubject.next([]);
-      return;
-    }
-    
-    if (this.useHardcodedPermissions) {
-      this.setHardcodedPermissions(roleId);
+      console.log('Permission Service: User found in storage with role_id', user.role_id);
+      if (user.permissions) {
+        console.log('Permission Service: Using permissions from storage', user.permissions);
+        this.userPermissionsSubject.next(user.permissions);
+      } else {
+        console.log('Permission Service: No permissions found in stored user data');
+      }
     } else {
-      this.fetchRolePermissions(roleId).subscribe(permissions => {
-        this.userPermissionsSubject.next(permissions);
-      });
+      console.log('Permission Service: No user found in storage');
     }
-  }
-  
-  private setHardcodedPermissions(roleId: string): void {
-    let permissions: string[] = [];
-    
-    if (roleId.toLowerCase().includes('admin')) {
-      permissions = this.hardcodedPermissions.admin;
-    } else if (roleId.toLowerCase().includes('manager')) {
-      permissions = this.hardcodedPermissions.manager;
-    } else {
-      permissions = this.hardcodedPermissions.employee;
-    }
-    
-    console.log(`[DEV] Using hardcoded permissions for role: ${roleId}`, permissions);
-    this.userPermissionsSubject.next(permissions);
-  }
-  
-  private fetchRolePermissions(roleId: string): Observable<string[]> {
-    // Fetch permissions from the server
-    return this.http.get<Role>(`/api/v1/roles/${roleId}`).pipe(
-      map(role => role.permissions || []),
-      catchError(error => {
-        console.error('Failed to fetch role permissions', error);
-        
-        // Fall back to hardcoded permissions in case of error
-        if (this.useHardcodedPermissions) {
-          let fallbackPermissions: string[] = [];
-          
-          if (roleId.toLowerCase().includes('admin')) {
-            fallbackPermissions = this.hardcodedPermissions.admin;
-          } else if (roleId.toLowerCase().includes('manager')) {
-            fallbackPermissions = this.hardcodedPermissions.manager;
-          } else {
-            fallbackPermissions = this.hardcodedPermissions.employee;
-          }
-          
-          console.warn('[DEV] Falling back to hardcoded permissions due to API error');
-          return of(fallbackPermissions);
-        }
-        
-        return of([]);
-      }),
-      tap(permissions => {
-        console.log('Fetched permissions:', permissions);
-      })
-    );
   }
   
   /**
@@ -144,21 +62,27 @@ export class PermissionService {
    */
   hasPermission(permission: string): boolean {
     const permissions = this.userPermissionsSubject.value;
-    return permissions.includes(permission);
+    const hasPermission = permissions.includes(permission);
+    console.log(`Permission check: "${permission}" - ${hasPermission ? 'Granted' : 'Denied'}`);
+    return hasPermission;
   }
   
   /**
    * Check if the user has at least one of the specified permissions
    */
   hasAnyPermission(permissions: string[]): boolean {
-    return permissions.some(permission => this.hasPermission(permission));
+    const result = permissions.some(permission => this.hasPermission(permission));
+    console.log(`Permission check (any): [${permissions.join(', ')}] - ${result ? 'Granted' : 'Denied'}`);
+    return result;
   }
   
   /**
    * Check if the user has all of the specified permissions
    */
   hasAllPermissions(permissions: string[]): boolean {
-    return permissions.every(permission => this.hasPermission(permission));
+    const result = permissions.every(permission => this.hasPermission(permission));
+    console.log(`Permission check (all): [${permissions.join(', ')}] - ${result ? 'Granted' : 'Denied'}`);
+    return result;
   }
   
   /**
@@ -207,24 +131,51 @@ export class PermissionService {
    */
   getRoleIdentifier(): 'admin' | 'manager' | 'employee' | 'unknown' {
     const user = this.authService.currentUser;
+    console.log('Getting role identifier for user:', user?.email, 'with role ID:', user?.role_id);
     
-    if (!user) return 'unknown';
+    if (!user) {
+      console.log('No user found, returning unknown role');
+      return 'unknown';
+    }
+    
+    // Check role ID directly (more reliable than permission checks)
+    if (user.role_id === '67c9fb4d9db05f47c32b6b22') {
+      console.log('Admin role ID detected');
+      return 'admin';
+    }
+    
+    if (user.role_id === '67c9fb4d9db05f47c32b6b23') {
+      console.log('Manager role ID detected');
+      return 'manager';
+    }
+    
+    if (user.role_id === '67c9fb4d9db05f47c32b6b24') {
+      console.log('Employee role ID detected');
+      return 'employee';
+    }
+    
+    // Fallback to permission-based detection
+    console.log('Using permission-based role detection');
     
     // Check for admin permissions
     if (this.hasPermission('users:delete') && this.hasPermission('roles:write')) {
+      console.log('Admin permissions detected');
       return 'admin';
     }
     
     // Check for manager permissions
     if (this.hasPermission('employees:approve') && this.hasPermission('hours:approve')) {
+      console.log('Manager permissions detected');
       return 'manager';
     }
     
-    // Default to employee
+    // Default to employee if they have basic permissions
     if (this.hasPermission('hours:read')) {
+      console.log('Employee permissions detected');
       return 'employee';
     }
     
+    console.log('No matching role pattern found, returning unknown');
     return 'unknown';
   }
   

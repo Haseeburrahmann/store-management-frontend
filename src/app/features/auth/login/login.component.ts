@@ -156,7 +156,6 @@ export class LoginComponent implements OnInit {
   
   onSubmit() {
     this.submitted = true;
-    this.error = '';
     
     // Stop here if form is invalid
     if (this.loginForm.invalid) {
@@ -164,6 +163,7 @@ export class LoginComponent implements OnInit {
     }
     
     this.loading = true;
+    this.error = '';
     
     this.authService.login(this.loginForm.value.email, this.loginForm.value.password)
       .pipe(
@@ -181,5 +181,5 @@ export class LoginComponent implements OnInit {
           this.error = err.message || 'Authentication failed';
         }
       });
-  }
+    }
 }

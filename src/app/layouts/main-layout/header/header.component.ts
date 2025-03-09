@@ -225,4 +225,8 @@ export class HeaderComponent implements OnInit {
     // For now, we're using a placeholder value
     this.notificationCount = 3;
   }
+  getCurrentDateTime(): string {
+    const now = new Date();
+    return now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
 }
