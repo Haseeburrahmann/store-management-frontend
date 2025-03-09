@@ -1,144 +1,134 @@
 // src/app/core/services/user.service.ts
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
-
-import { ApiService } from './api.service';
-import { DataAccessService } from './data-access.service';
-import { API_CONFIG } from '../config/api-config';
-import { User, UserCreate, UserUpdate } from '../../shared/models/user.model';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Observable, of } from 'rxjs';
+import { catchError, tap } from 'rxjs/operators';
+import { User } from '../../shared/models/user.model';
 
 @Injectable({
   providedIn: 'root'
 })
 export class UserService {
-  private cacheKey = 'users';
+  private apiUrl = '/api/v1/users';
   
-  constructor(
-    private apiService: ApiService,
-    private dataAccess: DataAccessService
-  ) {}
+  constructor(private http: HttpClient) {}
   
   /**
    * Get all users with optional filtering
    */
-  getUsers(params?: {
-    skip?: number;
-    limit?: number;
-    email?: string;
-    role_id?: string;
-  }, refresh = false): Observable<User[]> {
-    return this.dataAccess.getData(
-      this.cacheKey,
-      () => this.apiService.get<User[]>(API_CONFIG.users.base, params),
-      refresh
-    );
-  }
-  
-  /**
-   * Get current user profile
-   */
-  getCurrentUser(refresh = false): Observable<User> {
-    return this.dataAccess.getData(
-      `${this.cacheKey}_current`,
-      () => this.apiService.get<User>(API_CONFIG.users.me),
-      refresh
+  getUsers(options: {
+    skip?: number,
+    limit?: number,
+    email?: string,
+    role_id?: string
+  } = {}): Observable<User[]> {
+    let params = new HttpParams();
+    
+    if (options.skip !== undefined) params = params.set('skip', options.skip.toString());
+    if (options.limit !== undefined) params = params.set('limit', options.limit.toString());
+    if (options.email) params = params.set('email', options.email);
+    if (options.role_id) params = params.set('role_id', options.role_id);
+    
+    return this.http.get<User[]>(this.apiUrl, { params }).pipe(
+      tap(users => console.log(`Fetched ${users.length} users`)),
+      catchError(this.handleError<User[]>('getUsers', []))
     );
   }
   
   /**
    * Get user by ID
    */
-  getUser(id: string): Observable<User> {
-    return this.apiService.get<User>(API_CONFIG.users.getById(id));
+  getUserById(id: string): Observable<User> {
+    const url = `${this.apiUrl}/${id}`;
+    return this.http.get<User>(url).pipe(
+      tap(_ => console.log(`Fetched user id=${id}`)),
+      catchError(this.handleError<User>(`getUserById id=${id}`))
+    );
+  }
+  
+  /**
+   * Get current user profile
+   */
+  getCurrentUser(): Observable<User> {
+    const url = `${this.apiUrl}/me`;
+    return this.http.get<User>(url).pipe(
+      tap(user => console.log('Fetched current user')),
+      catchError(this.handleError<User>('getCurrentUser'))
+    );
   }
   
   /**
    * Create a new user
    */
-  createUser(user: UserCreate): Observable<User> {
-    return this.apiService.post<User>(API_CONFIG.users.base, user)
-      .pipe(
-        map(newUser => {
-          // Update cache with new user
-          this.updateUserCache(newUser);
-          return newUser;
-        })
-      );
+  createUser(user: Partial<User>): Observable<User> {
+    return this.http.post<User>(this.apiUrl, user).pipe(
+      tap((newUser: User) => console.log(`Created user id=${newUser._id}`)),
+      catchError(this.handleError<User>('createUser'))
+    );
   }
   
   /**
    * Update an existing user
    */
-  updateUser(id: string, user: UserUpdate): Observable<User> {
-    return this.apiService.put<User>(API_CONFIG.users.getById(id), user)
-      .pipe(
-        map(updatedUser => {
-          // Update cache with updated user
-          this.updateUserCache(updatedUser);
-          return updatedUser;
-        })
-      );
+  updateUser(id: string, user: Partial<User>): Observable<User> {
+    const url = `${this.apiUrl}/${id}`;
+    return this.http.put<User>(url, user).pipe(
+      tap(_ => console.log(`Updated user id=${id}`)),
+      catchError(this.handleError<User>(`updateUser id=${id}`))
+    );
   }
   
   /**
    * Delete a user
    */
   deleteUser(id: string): Observable<boolean> {
-    return this.apiService.delete<boolean>(API_CONFIG.users.getById(id))
-      .pipe(
-        map(result => {
-          if (result) {
-            // Remove user from cache
-            this.removeUserFromCache(id);
-          }
-          return result;
-        })
-      );
+    const url = `${this.apiUrl}/${id}`;
+    return this.http.delete<boolean>(url).pipe(
+      tap(_ => console.log(`Deleted user id=${id}`)),
+      catchError(this.handleError<boolean>(`deleteUser id=${id}`))
+    );
   }
   
   /**
-   * Update the cached users list with a new or updated user
+   * Change user password
    */
-  private updateUserCache(user: User): void {
-    const cached = this.dataAccess.getData(
-      this.cacheKey,
-      () => this.apiService.get<User[]>(API_CONFIG.users.base)
+  changePassword(currentPassword: string, newPassword: string): Observable<void> {
+    const url = `${this.apiUrl}/change-password`;
+    return this.http.post<void>(url, {
+      current_password: currentPassword,
+      new_password: newPassword
+    }).pipe(
+      tap(_ => console.log('Changed password')),
+      catchError(this.handleError<void>('changePassword'))
     );
-    
-    cached.subscribe(users => {
-      if (users) {
-        // Find and replace or add the user
-        const index = users.findIndex(u => u._id === user._id);
-        if (index >= 0) {
-          users[index] = user;
-        } else {
-          users.push(user);
-        }
-        
-        // Update cache
-        this.dataAccess.updateData(this.cacheKey, users);
-      }
-    });
   }
   
   /**
-   * Remove a user from the cached users list
+   * Get users by role
    */
-  private removeUserFromCache(id: string): void {
-    const cached = this.dataAccess.getData(
-      this.cacheKey,
-      () => this.apiService.get<User[]>(API_CONFIG.users.base)
-    );
-    
-    cached.subscribe(users => {
-      if (users) {
-        // Filter out the deleted user
-        const filtered = users.filter(u => u._id !== id);
-        
-        // Update cache
-        this.dataAccess.updateData(this.cacheKey, filtered);
-      }
-    });
+  getUsersByRole(roleId: string): Observable<User[]> {
+    return this.getUsers({ role_id: roleId });
+  }
+  
+  /**
+   * Assign role to user
+   */
+  assignRole(userId: string, roleId: string): Observable<User> {
+    return this.updateUser(userId, { role_id: roleId });
+  }
+  
+  /**
+   * Handle Http operation that failed.
+   * Let the app continue.
+   * @param operation - name of the operation that failed
+   * @param result - optional value to return as the observable result
+   */
+  private handleError<T>(operation = 'operation', result?: T) {
+    return (error: any): Observable<T> => {
+      console.error(`${operation} failed: ${error.message}`);
+      
+      // Let the app keep running by returning an empty result
+      return of(result as T);
+    };
   }
 }
