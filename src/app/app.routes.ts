@@ -14,6 +14,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/auth/login/login.component').then(m => m.LoginComponent)
       },
       {
+        path: 'register',
+        loadComponent: () => import('./features/auth/register/register.component').then(m => m.RegisterComponent)
+      },
+      {
         path: '',
         redirectTo: 'login',
         pathMatch: 'full'
@@ -32,6 +36,18 @@ export const routes: Routes = [
       {
         path: 'profile',
         loadComponent: () => import('./features/users/profile/profile.component').then(m => m.ProfileComponent)
+      },
+      {
+        path: 'auth-test',
+        loadComponent: () => import('./shared/components/auth-test/auth-test.component').then(m => m.AuthTestComponent)
+      },
+      // {
+      //   path: 'users',
+      //   loadChildren: () => import('./features/users/users.routes').then(m => m.USER_ROUTES),
+      // },
+      {
+        path: 'access-denied',
+        loadComponent: () => import('./features/auth/access-denied/access-denied.component').then(m => m.AccessDeniedComponent)
       },
       {
         path: '',
