@@ -1,145 +1,215 @@
 // src/app/features/dashboard/dashboard.component.ts
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatCardModule } from '@angular/material/card';
-import { MatIconModule } from '@angular/material/icon';
-import { MatButtonModule } from '@angular/material/button';
-import { RouterModule } from '@angular/router';
-
-import { PageHeaderComponent } from '../../shared/components/page-header/page-header.component';
-import { CardContainerComponent } from '../../shared/components/card-container/card-container.component';
-import { AuthService } from '../../core/services/auth.service';
-import { User } from '../../shared/models/user.model';
+import { RouterLink } from '@angular/router';
+import { AuthService } from '../../core/auth/auth.service';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [
-    CommonModule,
-    MatCardModule,
-    MatIconModule,
-    MatButtonModule,
-    RouterModule,
-    PageHeaderComponent,
-    CardContainerComponent
-  ],
+  imports: [CommonModule, RouterLink],
   template: `
-    <div class="dashboard-container">
-      <app-page-header 
-        title="Dashboard" 
-        subtitle="Welcome to the Store Management System">
-      </app-page-header>
+    <div class="container mx-auto">
+      <!-- Welcome section -->
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-6">
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Welcome back, Admin!</h1>
+        <p class="text-slate-600 dark:text-slate-300 mt-1">Here's what's happening in your stores today.</p>
+      </div>
       
-      <div class="dashboard-content">
-        <div class="welcome-card">
-          <app-card-container [title]="'Welcome, ' + getUserName()">
-            <p>
-              Welcome to the Store Management System. Use the navigation menu to access different sections of the application.
-            </p>
-            
-            <div class="quick-actions">
-              <h3>Quick Actions</h3>
-              <div class="action-buttons">
-              
-              <button 
-                mat-flat-button 
-                color="primary" 
-                routerLink="/users"
-                *ngIf="canAccessUsers">
-                <mat-icon>people</mat-icon>
-                Manage Users
-              </button>
-              
-                <button mat-flat-button color="primary" routerLink="/stores">
-                  <mat-icon>store</mat-icon>
-                  Manage Stores
-                </button>
-                
-                <button mat-flat-button color="accent" routerLink="/employees">
-                  <mat-icon>people</mat-icon>
-                  Manage Employees
-                </button>
-                
-                <button mat-flat-button color="warn" routerLink="/hours">
-                  <mat-icon>schedule</mat-icon>
-                  Track Hours
-                </button>
+      <!-- Stats cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        <!-- Active Employees -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden">
+          <div class="p-5">
+            <div class="flex items-center">
+              <div class="flex-shrink-0 bg-slate-100 dark:bg-slate-700 rounded-md p-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-slate-600 dark:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              </div>
+              <div class="ml-5 w-0 flex-1">
+                <dl>
+                  <dt class="text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Active Employees</dt>
+                  <dd class="flex items-baseline">
+                    <div class="text-2xl font-semibold text-slate-900 dark:text-white">24</div>
+                    <div class="ml-2 flex items-baseline text-sm font-semibold text-green-600 dark:text-green-500">
+                      <svg class="w-5 h-5 fill-current" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                      </svg>
+                      <span class="sr-only">Increased by</span>
+                      3
+                    </div>
+                  </dd>
+                </dl>
               </div>
             </div>
-          </app-card-container>
+          </div>
+          <div class="bg-slate-50 dark:bg-slate-700 px-5 py-3">
+            <div class="text-sm">
+              <a routerLink="/employees" class="font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">View all employees</a>
+            </div>
+          </div>
         </div>
         
-        <!-- More dashboard widgets will be added here in future steps -->
+        <!-- Active Stores -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden">
+          <div class="p-5">
+            <div class="flex items-center">
+              <div class="flex-shrink-0 bg-amber-100 dark:bg-amber-900 rounded-md p-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-amber-600 dark:text-amber-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <div class="ml-5 w-0 flex-1">
+                <dl>
+                  <dt class="text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Active Stores</dt>
+                  <dd class="text-2xl font-semibold text-slate-900 dark:text-white">8</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+          <div class="bg-slate-50 dark:bg-slate-700 px-5 py-3">
+            <div class="text-sm">
+              <a routerLink="/stores" class="font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">View all stores</a>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Hours This Week -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden">
+          <div class="p-5">
+            <div class="flex items-center">
+              <div class="flex-shrink-0 bg-cyan-100 dark:bg-cyan-900 rounded-md p-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-cyan-600 dark:text-cyan-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div class="ml-5 w-0 flex-1">
+                <dl>
+                  <dt class="text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Hours This Week</dt>
+                  <dd class="flex items-baseline">
+                    <div class="text-2xl font-semibold text-slate-900 dark:text-white">823</div>
+                    <div class="ml-2 flex items-baseline text-sm font-semibold text-green-600 dark:text-green-500">
+                      <svg class="w-5 h-5 fill-current" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                      </svg>
+                      <span class="sr-only">Increased by</span>
+                      12%
+                    </div>
+                  </dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+          <div class="bg-slate-50 dark:bg-slate-700 px-5 py-3">
+            <div class="text-sm">
+              <a routerLink="/hours" class="font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">View timesheet</a>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Pending Approvals -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden">
+          <div class="p-5">
+            <div class="flex items-center">
+              <div class="flex-shrink-0 bg-slate-100 dark:bg-slate-700 rounded-md p-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-slate-600 dark:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div class="ml-5 w-0 flex-1">
+                <dl>
+                  <dt class="text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Pending Approvals</dt>
+                  <dd class="text-2xl font-semibold text-slate-900 dark:text-white">5</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+          <div class="bg-slate-50 dark:bg-slate-700 px-5 py-3">
+            <div class="text-sm">
+              <a routerLink="/approvals" class="font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">Review approvals</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Recent Activity -->
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden mb-6">
+        <div class="px-6 py-5 border-b border-slate-200 dark:border-slate-700">
+          <h3 class="text-lg font-medium leading-6 text-slate-900 dark:text-white">Recent Activity</h3>
+        </div>
+        <ul class="divide-y divide-slate-200 dark:divide-slate-700">
+          <!-- Activity Item 1 -->
+          <li>
+            <div class="px-6 py-4">
+              <div class="flex items-center justify-between">
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-slate-900 dark:text-white truncate">
+                    Jane Smith clocked in
+                  </p>
+                  <p class="text-sm text-slate-500 dark:text-slate-400">
+                    Today at 8:03 AM • Downtown Store
+                  </p>
+                </div>
+                <div>
+                  <div class="ml-4 flex-shrink-0 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-1">
+                    On time
+                  </div>
+                </div>
+              </div>
+            </div>
+          </li>
+          
+          <!-- Activity Item 2 -->
+          <li>
+            <div class="px-6 py-4">
+              <div class="flex items-center justify-between">
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-slate-900 dark:text-white truncate">
+                    John Doe submitted timesheet for approval
+                  </p>
+                  <p class="text-sm text-slate-500 dark:text-slate-400">
+                    Yesterday at 5:15 PM • Total hours: 8.5
+                  </p>
+                </div>
+                <div>
+                  <div class="ml-4 flex-shrink-0 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 px-2 py-1">
+                    Pending
+                  </div>
+                </div>
+              </div>
+            </div>
+          </li>
+          
+          <!-- Activity Item 3 -->
+          <li>
+            <div class="px-6 py-4">
+              <div class="flex items-center">
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-slate-900 dark:text-white truncate">
+                    Robert Johnson was assigned to Eastside Store
+                  </p>
+                  <p class="text-sm text-slate-500 dark:text-slate-400">
+                    Mar 6, 2025 at 2:23 PM
+                  </p>
+                </div>
+              </div>
+            </div>
+          </li>
+        </ul>
+        <div class="bg-slate-50 dark:bg-slate-700 px-6 py-3">
+          <div class="text-sm">
+            <a routerLink="/activity" class="font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">View all activity</a>
+          </div>
+        </div>
       </div>
     </div>
-  `,
-  styles: [`
-    .dashboard-container {
-      padding: 16px;
-    }
-    
-    .dashboard-content {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 20px;
-      margin-top: 20px;
-    }
-    
-    .welcome-card {
-      grid-column: 1 / -1;
-    }
-    
-    .quick-actions {
-      margin-top: 20px;
-    }
-    
-    .action-buttons {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-top: 10px;
-    }
-    
-    .action-buttons button {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    
-    @media (max-width: 600px) {
-      .dashboard-content {
-        grid-template-columns: 1fr;
-      }
-      
-      .action-buttons {
-        flex-direction: column;
-      }
-    }
-  `]
+  `
 })
 export class DashboardComponent implements OnInit {
   constructor(private authService: AuthService) {}
   
   ngOnInit(): void {
-    // Dashboard initialization logic here
-    
-  }
-  
-  getUserName(): string {
-    const user = this.authService.currentUserValue;
-    return user ? user.full_name : 'User';
-  }
-
-  get canAccessUsers(): boolean {
-    const user = this.authService.currentUserValue;
-    console.log('Current user:', user);
-    
-    const hasPermission = this.authService.hasPermission('users:read');
-    console.log('Can access users:', hasPermission);
-    
-    // Temporarily return true to test
-    // return true;
-    
-    return hasPermission;
+    // Load dashboard data
   }
 }

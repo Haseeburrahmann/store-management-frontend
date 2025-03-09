@@ -1,32 +1,43 @@
-// src/app/app.routes.ts (updated)
+// src/app/app.routes.ts
 import { Routes } from '@angular/router';
-import { NavigationComponent } from './features/navigation/navigation.component';
-import { authGuard } from './core/auth/guards/auth.guard';
+import { AuthLayoutComponent } from './layouts/auth-layout/auth-layout.component';
+import { MainLayoutComponent } from './layouts/main-layout/main-layout.component';
+import { AuthGuard } from './core/auth/auth.guard';
 
 export const routes: Routes = [
   {
     path: 'auth',
-    loadChildren: () => import('./features/auth/auth.routes').then(m => m.AUTH_ROUTES)
+    component: AuthLayoutComponent,
+    children: [
+      {
+        path: 'login',
+        loadComponent: () => import('./features/auth/login/login.component').then(m => m.LoginComponent)
+      },
+      {
+        path: '',
+        redirectTo: 'login',
+        pathMatch: 'full'
+      }
+    ]
   },
   {
     path: '',
-    component: NavigationComponent,
-    canActivate: [authGuard],
+    component: MainLayoutComponent,
+    canActivate: [AuthGuard],
     children: [
       {
-        path: '',
-        pathMatch: 'full',
-        redirectTo: 'dashboard'
-      },
-      {
         path: 'dashboard',
-        loadChildren: () => import('./features/dashboard/dashboard.routes').then(m => m.DASHBOARD_ROUTES)
+        loadComponent: () => import('./features/dashboard/dashboard.component').then(m => m.DashboardComponent)
       },
       {
-        path: 'users',
-        loadChildren: () => import('./features/user-management/user-management.routes').then(m => m.USER_MANAGEMENT_ROUTES)
+        path: 'profile',
+        loadComponent: () => import('./features/users/profile/profile.component').then(m => m.ProfileComponent)
       },
-      // Other feature modules will be lazy loaded here as we implement them
+      {
+        path: '',
+        redirectTo: 'dashboard',
+        pathMatch: 'full'
+      }
     ]
   },
   {
