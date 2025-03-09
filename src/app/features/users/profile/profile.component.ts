@@ -6,6 +6,7 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { UserService } from '../../../core/services/user.service';
 import { User } from '../../../shared/models/user.model';
+import { PermissionService } from '../../../core/auth/permission.service';
 
 @Component({
   selector: 'app-profile',
@@ -58,7 +59,21 @@ import { User } from '../../../shared/models/user.model';
         <div class="card col-span-1 lg:col-span-2">
           <h2 class="text-xl font-bold mb-6">Edit Profile Information</h2>
           
-          <form [formGroup]="profileForm" (ngSubmit)="onSubmit()" *ngIf="profileForm">
+          <!-- Permission denied message -->
+          <div *ngIf="!canUpdateProfile" class="alert alert-warning mb-6">
+            <div class="flex">
+              <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+              </div>
+              <div class="ml-3">
+                <p class="text-sm font-medium">You don't have permission to update your profile. Please contact an administrator for assistance.</p>
+              </div>
+            </div>
+          </div>
+          
+          <form [formGroup]="profileForm" (ngSubmit)="onSubmit()" *ngIf="profileForm && canUpdateProfile">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div class="form-group">
                 <label for="full_name" class="form-label required">Full Name</label>
@@ -112,63 +127,12 @@ import { User } from '../../../shared/models/user.model';
             </div>
             
             <div class="mt-8 border-t border-[var(--border-color)] pt-6">
-              <h3 class="text-lg font-semibold mb-4">Change Password</h3>
+              <h2 class="text-lg font-semibold text-gray-700 mb-4">Account Information</h2>
               
-              <!-- <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="form-group">
-                  <label for="current_password" class="form-label">Current Password</label>
-                  <input 
-                    type="password" 
-                    id="current_password" 
-                    formControlName="current_password"
-                    class="form-control"
-                    [ngClass]="{'border-red-500': submitted && passwordChangeRequested && f['current_password'].errors}"
-                  >
-                  <div *ngIf="submitted && passwordChangeRequested && f['current_password'].errors" class="form-error">
-                    <div *ngIf="f['current_password'].errors['required']">Current password is required to change password</div>
-                  </div>
-                </div>
-                
-                <div></div> 
-                
-                <div class="form-group">
-                  <label for="new_password" class="form-label">New Password</label>
-                  <input 
-                    type="password" 
-                    id="new_password" 
-                    formControlName="new_password"
-                    class="form-control"
-                    [ngClass]="{'border-red-500': submitted && passwordChangeRequested && f['new_password'].errors}"
-                  >
-                  <div *ngIf="submitted && passwordChangeRequested && f['new_password'].errors" class="form-error">
-                    <div *ngIf="f['new_password'].errors['required']">New password is required</div>
-                    <div *ngIf="f['new_password'].errors['minlength']">Password must be at least 8 characters</div>
-                  </div>
-                </div>
-                
-                <div class="form-group">
-                  <label for="confirm_password" class="form-label">Confirm New Password</label>
-                  <input 
-                    type="password" 
-                    id="confirm_password" 
-                    formControlName="confirm_password"
-                    class="form-control"
-                    [ngClass]="{'border-red-500': submitted && passwordChangeRequested && (f['confirm_password'].errors || passwordMismatch)}"
-                  >
-                  <div *ngIf="submitted && passwordChangeRequested && (f['confirm_password'].errors || passwordMismatch)" class="form-error">
-                    <div *ngIf="f['confirm_password'].errors?.['required']">Please confirm your password</div>
-                    <div *ngIf="passwordMismatch">Passwords do not match</div>
-                  </div>
-                </div>
-              </div> -->
-              <div class="mt-8 border-t pt-6">
-            <h2 class="text-lg font-semibold text-gray-700 mb-4">Account Information</h2>
-            
-            <div class="text-sm text-gray-600">
-              <p>Account created: {{ user?.created_at | date:'mediumDate' }}</p>
-              <p>Last updated: {{ user?.updated_at | date:'mediumDate' }}</p>
-            </div>
-            </div>
+              <div class="text-sm text-gray-600">
+                <p>Account created: {{ user?.created_at | date:'mediumDate' }}</p>
+                <p>Last updated: {{ user?.updated_at | date:'mediumDate' }}</p>
+              </div>
             </div>
             
             <div class="flex justify-end space-x-4 mt-6">
@@ -196,6 +160,31 @@ import { User } from '../../../shared/models/user.model';
               </button>
             </div>
           </form>
+          
+          <!-- Read-only profile view when user can't edit -->
+          <div *ngIf="!canUpdateProfile && user">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="form-group">
+                <label class="form-label">Full Name</label>
+                <div class="p-2 bg-slate-50 dark:bg-slate-700 rounded">{{ user.full_name }}</div>
+              </div>
+              
+              <div class="form-group">
+                <label class="form-label">Email</label>
+                <div class="p-2 bg-slate-50 dark:bg-slate-700 rounded">{{ user.email }}</div>
+              </div>
+              
+              <div class="form-group">
+                <label class="form-label">Phone Number</label>
+                <div class="p-2 bg-slate-50 dark:bg-slate-700 rounded">{{ user.phone_number || 'Not provided' }}</div>
+              </div>
+              
+              <div class="form-group">
+                <label class="form-label">Role</label>
+                <div class="p-2 bg-slate-50 dark:bg-slate-700 rounded">{{ roleName }}</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       
@@ -274,18 +263,46 @@ export class ProfileComponent implements OnInit {
   successMessage = '';
   errorMessage = '';
   roleName = 'Employee';
-  passwordMismatch = false;
-  passwordChangeRequested = false;
+  canUpdateProfile = false;
 
   constructor(
     private authService: AuthService,
     private userService: UserService,
+    private permissionService: PermissionService,
     private formBuilder: FormBuilder,
     private router: Router
   ) {}
 
   ngOnInit(): void {
-    debugger;
+    this.loadUserData();
+    this.checkPermissions();
+  }
+
+  private checkPermissions(): void {
+    // Check if the user has permission to update their own profile
+    // Usually users can update their own basic info, but this depends on your permission system
+    this.canUpdateProfile = this.permissionService.hasPermission('users:write') || 
+                            this.permissionService.isAdmin() ||
+                            this.permissionService.isManager();
+    
+    // If none of the above permissions are present, check if users can at least update their own profile
+    if (!this.canUpdateProfile) {
+      // Some systems might have a specific permission for updating own profile
+      this.canUpdateProfile = this.permissionService.hasPermission('profile:write');
+    }
+
+    // If still no permissions, one final check - if user has any write permissions at all
+    if (!this.canUpdateProfile) {
+      // Look for any permissions that end with ":write"
+      const allPermissions = this.permissionService.userPermissionsSubject.value;
+      this.canUpdateProfile = allPermissions.some(perm => perm.endsWith(':write'));
+    }
+    
+    console.log('User can update profile:', this.canUpdateProfile);
+  }
+
+  private loadUserData(): void {
+    // First try to get user from auth service
     this.user = this.authService.currentUser;
     
     if (!this.user) {
@@ -308,7 +325,10 @@ export class ProfileComponent implements OnInit {
   }
 
   private initForm(): void {
-    if (!this.user) return;
+    if (!this.user) {
+      console.error('Cannot initialize form: User data is missing');
+      return;
+    }
 
     // Ensure we're correctly accessing the phone_number property
     console.log('User data for form initialization:', this.user);
@@ -324,13 +344,11 @@ export class ProfileComponent implements OnInit {
   }
 
   private determineRoleName(): void {
-    // This is a placeholder - ideally you would get the role name from your API
-    // For now we'll determine based on role_id pattern
+    // Determine role name based on role_id
     if (this.user?.role_id) {
-      const roleId = this.user.role_id.toLowerCase();
-      if (roleId.includes('admin')) {
+      if (this.user.role_id === '67c9fb4d9db05f47c32b6b22') {
         this.roleName = 'Administrator';
-      } else if (roleId.includes('manager')) {
+      } else if (this.user.role_id === '67c9fb4d9db05f47c32b6b23') {
         this.roleName = 'Store Manager';
       } else {
         this.roleName = 'Employee';
@@ -351,43 +369,19 @@ export class ProfileComponent implements OnInit {
   }
 
   onSubmit(): void {
-
     this.submitted = true;
     this.successMessage = '';
     this.errorMessage = '';
-    this.passwordMismatch = false;
     
-    // Check if a password change was requested
-    this.passwordChangeRequested = this.f['current_password'].value || 
-                                 this.f['new_password'].value || 
-                                 this.f['confirm_password'].value;
+    // Check permissions before proceeding
+    if (!this.canUpdateProfile) {
+      this.errorMessage = 'You do not have permission to update your profile.';
+      return;
+    }
     
     // Validate form
     if (this.profileForm?.invalid) {
       return;
-    }
-    
-    // Check if passwords match if password change was requested
-    if (this.passwordChangeRequested) {
-      if (!this.f['current_password'].value) {
-        this.f['current_password'].setErrors({ required: true });
-        return;
-      }
-      
-      if (!this.f['new_password'].value) {
-        this.f['new_password'].setErrors({ required: true });
-        return;
-      }
-      
-      if (!this.f['confirm_password'].value) {
-        this.f['confirm_password'].setErrors({ required: true });
-        return;
-      }
-      
-      if (this.f['new_password'].value !== this.f['confirm_password'].value) {
-        this.passwordMismatch = true;
-        return;
-      }
     }
     
     this.loading = true;
@@ -398,58 +392,68 @@ export class ProfileComponent implements OnInit {
       return;
     }
     
-    // Update user profile (excluding password fields)
+    // Update user profile
     const userData = {
       full_name: this.f['full_name'].value,
       email: this.f['email'].value,
       phone_number: this.f['phone_number'].value
     };
     
+    console.log('Updating user profile with data:', userData);
+    
     this.userService.updateUser(this.user._id, userData).subscribe({
       next: (updatedUser) => {
+        console.log('Profile updated successfully:', updatedUser);
+        this.loading = false;
+        this.successMessage = 'Profile updated successfully!';
+        
         // Update local user data
-        this.user = updatedUser;
-        
-        // Update auth service user data
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-        
-        // Handle password change if requested
-        if (this.passwordChangeRequested) {
-          this.changePassword();
+        if (updatedUser) {
+          this.user = updatedUser;
+          
+          try {
+            // Update auth service user data safely
+            const storedUserJson = localStorage.getItem('user');
+            if (storedUserJson) {
+              const storedUser = JSON.parse(storedUserJson);
+              const mergedUser = { 
+                ...storedUser,
+                full_name: updatedUser.full_name,
+                email: updatedUser.email,
+                phone_number: updatedUser.phone_number,
+                updated_at: updatedUser.updated_at
+              };
+              
+              // Save back to localStorage
+              localStorage.setItem('user', JSON.stringify(mergedUser));
+              
+              // Force a reload of the current user
+              console.log('Refreshing user data in auth service');
+              this.authService.fetchCurrentUser().subscribe({
+                next: () => console.log('Auth service user data refreshed'),
+                error: (err) => console.error('Failed to refresh auth service user data', err)
+              });
+            }
+          } catch (error) {
+            console.error('Error updating user in localStorage:', error);
+            // Non-critical error, don't show to user
+          }
         } else {
-          this.loading = false;
-          this.successMessage = 'Profile updated successfully!';
+          console.warn('Backend returned empty user object after update');
         }
       },
       error: (error) => {
         this.loading = false;
-        this.errorMessage = error.message || 'Failed to update profile.';
-        console.error('Error updating user:', error);
-      }
-    });
-  }
-  
-  changePassword(): void {
-    if (!this.passwordChangeRequested) return;
-    
-    this.userService.changePassword(
-      this.f['current_password'].value,
-      this.f['new_password'].value
-    ).subscribe({
-      next: () => {
-        this.loading = false;
-        this.successMessage = 'Profile and password updated successfully!';
         
-        // Clear password fields
-        this.f['current_password'].setValue('');
-        this.f['new_password'].setValue('');
-        this.f['confirm_password'].setValue('');
-        this.passwordChangeRequested = false;
-      },
-      error: (error) => {
-        this.loading = false;
-        this.errorMessage = error.message || 'Failed to change password. Profile was updated.';
-        console.error('Error changing password:', error);
+        // Check if the error is due to permissions
+        if (error.status === 403) {
+          this.errorMessage = 'You do not have permission to update your profile.';
+          this.canUpdateProfile = false;  // Update the permission flag
+        } else {
+          this.errorMessage = error.message || 'Failed to update profile.';
+        }
+        
+        console.error('Error updating user:', error);
       }
     });
   }
@@ -458,10 +462,8 @@ export class ProfileComponent implements OnInit {
     if (!this.user) return;
     
     this.submitted = false;
-    this.passwordChangeRequested = false;
-    this.passwordMismatch = false;
     
-    // Reset form to original values
-    this.initForm();
+    // Reload user data to ensure we have the latest
+    this.loadUserData();
   }
 }
