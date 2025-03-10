@@ -12,7 +12,7 @@ import { AuthService } from '../auth/auth.service';
   providedIn: 'root'
 })
 export class HoursService {
-  private timeEntriesUrl = '/api/v1/time-entries';
+  private timeEntriesUrl = '/api/v1/hours';
   private timesheetsUrl = '/api/v1/timesheets';
   private schedulesUrl = '/api/v1/schedules';
   
@@ -392,11 +392,11 @@ export class HoursService {
    */
   getEmployeeSchedule(employeeId: string, startDate: string, endDate: string): Observable<ScheduleShift[]> {
     const params = new HttpParams()
-      .set('employee_id', employeeId)
       .set('start_date', startDate)
       .set('end_date', endDate);
     
-    const url = `${this.schedulesUrl}/employee`;
+    // Change the endpoint to match your backend
+    const url = `${this.schedulesUrl}/employee/${employeeId}/shifts`;
     return this.http.get<ScheduleShift[]>(url, { params }).pipe(
       tap(shifts => console.log(`Fetched ${shifts.length} shifts for employee id=${employeeId}`)),
       catchError(this.handleError<ScheduleShift[]>(`getEmployeeSchedule employeeId=${employeeId}`, []))
