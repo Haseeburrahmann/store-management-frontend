@@ -42,6 +42,12 @@ export const routes: Routes = [
         loadChildren: () => import('./features/users/users.routes').then(m => m.USER_ROUTES),
       },
       {
+        path: 'stores',
+        loadChildren: () => import('./features/stores/stores.routes').then(m => m.STORE_ROUTES),
+        canActivate: [AuthGuard],
+        data: { requiredPermission: 'stores:read' }
+      },
+      {
         path: 'auth-test',
         loadComponent: () => import('./shared/components/auth-test/auth-test.component').then(m => m.AuthTestComponent)
       },
@@ -53,10 +59,6 @@ export const routes: Routes = [
         path: '',
         redirectTo: 'dashboard',
         pathMatch: 'full'
-      },
-      {
-        path: 'users',
-        loadChildren: () => import('./features/users/users.routes').then(m => m.USER_ROUTES)
       }
     ]
   },
