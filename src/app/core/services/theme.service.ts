@@ -19,19 +19,19 @@ export class ThemeService {
   constructor(rendererFactory: RendererFactory2) {
     this.renderer = rendererFactory.createRenderer(null, null);
     
-    console.log('ThemeService constructor called');
+    //console.log('ThemeService constructor called');
     
     // Load saved theme from localStorage
     const savedTheme = localStorage.getItem('theme') as ThemeOption;
     if (savedTheme) {
-      console.log(`Loading saved theme: ${savedTheme}`);
+      //console.log(`Loading saved theme: ${savedTheme}`);
       this.setTheme(savedTheme, false);
     }
     
     // Load saved mode from localStorage or use system preference
     const savedMode = localStorage.getItem('mode') as ModeOption;
     if (savedMode) {
-      console.log(`Loading saved mode: ${savedMode}`);
+      //console.log(`Loading saved mode: ${savedMode}`);
       this.setMode(savedMode, false);
     } else {
       // Check for system preference if no saved mode
@@ -51,7 +51,7 @@ export class ThemeService {
   }
   
   setTheme(theme: ThemeOption, saveToStorage: boolean = true): void {
-    console.log(`Setting theme to: ${theme}`);
+    //console.log(`Setting theme to: ${theme}`);
     this.currentThemeSubject.next(theme);
     
     if (saveToStorage) {
@@ -62,7 +62,7 @@ export class ThemeService {
   }
   
   setMode(mode: ModeOption, saveToStorage: boolean = true): void {
-    console.log(`Setting mode to: ${mode}`);
+    //console.log(`Setting mode to: ${mode}`);
     this.currentModeSubject.next(mode);
     
     if (saveToStorage) {
@@ -94,7 +94,7 @@ export class ThemeService {
     
     this.renderer.addClass(document.documentElement, `theme-${theme}`);
     
-    console.log(`Applied theme-${theme} and ${mode} mode`);
+    //console.log(`Applied theme-${theme} and ${mode} mode`);
   }
   
   getCurrentTheme(): ThemeOption {
@@ -108,7 +108,7 @@ export class ThemeService {
   toggleMode(): void {
     const currentMode = this.getCurrentMode();
     const newMode: ModeOption = currentMode === 'light' ? 'dark' : 'light';
-    console.log(`Toggling mode from ${currentMode} to ${newMode}`);
+    //console.log(`Toggling mode from ${currentMode} to ${newMode}`);
     this.setMode(newMode);
   }
 }

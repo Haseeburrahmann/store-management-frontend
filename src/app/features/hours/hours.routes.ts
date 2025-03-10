@@ -5,7 +5,7 @@ import { AuthGuard } from '../../core/auth/auth.guard';
 export const HOURS_ROUTES: Routes = [
   {
     path: '',
-    loadComponent: () => import('./dashboard/hours-dashboard.component').then(m => m.HoursDashboardComponent),
+    loadComponent: () => import('./hours-dashboard/hours-dashboard.component').then(m => m.HoursDashboardComponent),
     canActivate: [AuthGuard],
     data: { requiredPermission: 'hours:read' }
   },
