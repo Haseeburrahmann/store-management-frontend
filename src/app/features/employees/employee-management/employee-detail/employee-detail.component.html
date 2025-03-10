@@ -1,0 +1,260 @@
+<div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">Employee Details</h1>
+      <div class="flex flex-col sm:flex-row gap-4">
+        <button routerLink="/employees" class="btn btn-outline flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back to Employees
+        </button>
+        
+        <button 
+          *appHasPermission="'employees:write'"
+          [routerLink]="['/employees', employeeId, 'edit']" 
+          class="btn btn-primary flex items-center"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          Edit Employee
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading state -->
+    <div *ngIf="loading" class="flex justify-center items-center p-8">
+      <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-500"></div>
+    </div>
+    
+    <!-- Error state -->
+    <div *ngIf="error" class="alert alert-danger mb-6">
+      {{ error }}
+    </div>
+    
+    <!-- Employee details -->
+    <div *ngIf="employee && !loading" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Employee overview card -->
+      <div class="card col-span-1">
+        <div class="flex flex-col items-center">
+          <!-- Employee avatar -->
+          <div class="h-24 w-24 rounded-full bg-slate-600 dark:bg-slate-700 flex items-center justify-center text-white text-2xl font-bold mb-4">
+            {{ getEmployeeInitials() }}
+          </div>
+          
+          <!-- Employee info -->
+          <h2 class="text-xl font-bold">{{ employee.full_name || 'Unknown' }}</h2>
+          <p class="text-sm text-[var(--text-secondary)]">{{ employee.position }}</p>
+          
+          <!-- Status badge -->
+          <div class="mt-4">
+            <span 
+              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+              [ngClass]="getStatusBadgeClass(employee.employment_status)"
+            >
+              {{ getStatusLabel(employee.employment_status) }}
+            </span>
+          </div>
+          
+          <!-- Store assignment -->
+          <div class="mt-4 text-center">
+            <p class="text-sm text-[var(--text-secondary)]">Assigned to</p>
+            <p class="font-medium">{{ employee.store_name || 'Not assigned to any store' }}</p>
+          </div>
+          
+          <!-- Employee details -->
+          <div class="w-full mt-6 pt-6 border-t border-[var(--border-color)]">
+            <div class="grid grid-cols-1 gap-4">
+              <div class="flex flex-col">
+                <span class="text-xs text-[var(--text-secondary)]">Email</span>
+                <span>{{ employee.email || 'Not available' }}</span>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-xs text-[var(--text-secondary)]">Phone</span>
+                <span>{{ employee.phone_number || 'Not available' }}</span>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-xs text-[var(--text-secondary)]">Hire Date</span>
+                <span>{{ employee.hire_date | date:'mediumDate' }}</span>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-xs text-[var(--text-secondary)]">Hourly Rate</span>
+                <span>${{ employee.hourly_rate }}/hour</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Employee management panel -->
+      <div class="card col-span-1 lg:col-span-2">
+        <h2 class="text-xl font-bold mb-6">Employee Management</h2>
+        
+        <div class="space-y-6">
+          <!-- Personal Information -->
+          <div class="border border-[var(--border-color)] rounded-lg overflow-hidden">
+            <div class="px-4 py-3 bg-[var(--bg-main)] border-b border-[var(--border-color)]">
+              <h3 class="text-md font-medium">Personal Information</h3>
+            </div>
+            <div class="p-4 space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="text-xs text-[var(--text-secondary)]">Address</label>
+                  <div class="mt-1 p-2 bg-[var(--bg-main)] rounded">{{ employee.address || 'Not provided' }}</div>
+                </div>
+                <div>
+                  <label class="text-xs text-[var(--text-secondary)]">City</label>
+                  <div class="mt-1 p-2 bg-[var(--bg-main)] rounded">{{ employee.city || 'Not provided' }}</div>
+                </div>
+                <div>
+                  <label class="text-xs text-[var(--text-secondary)]">State</label>
+                  <div class="mt-1 p-2 bg-[var(--bg-main)] rounded">{{ employee.state || 'Not provided' }}</div>
+                </div>
+                <div>
+                  <label class="text-xs text-[var(--text-secondary)]">Zip Code</label>
+                  <div class="mt-1 p-2 bg-[var(--bg-main)] rounded">{{ employee.zip_code || 'Not provided' }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Emergency Contact Information -->
+          <div class="border border-[var(--border-color)] rounded-lg overflow-hidden">
+            <div class="px-4 py-3 bg-[var(--bg-main)] border-b border-[var(--border-color)]">
+              <h3 class="text-md font-medium">Emergency Contact</h3>
+            </div>
+            <div class="p-4 space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="text-xs text-[var(--text-secondary)]">Name</label>
+                  <div class="mt-1 p-2 bg-[var(--bg-main)] rounded">{{ employee.emergency_contact_name || 'Not provided' }}</div>
+                </div>
+                <div>
+                  <label class="text-xs text-[var(--text-secondary)]">Phone</label>
+                  <div class="mt-1 p-2 bg-[var(--bg-main)] rounded">{{ employee.emergency_contact_phone || 'Not provided' }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Store Assignment (for admins and managers) -->
+          <div *appHasPermission="'employees:write'" class="border border-[var(--border-color)] rounded-lg overflow-hidden">
+            <div class="px-4 py-3 bg-[var(--bg-main)] border-b border-[var(--border-color)]">
+              <h3 class="text-md font-medium">Store Assignment</h3>
+            </div>
+            <div class="p-4">
+              <p class="text-sm mb-4">Assign this employee to a store to manage their work location.</p>
+              
+              <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
+                <div class="flex-grow">
+                  <select 
+                    [(ngModel)]="selectedStoreId"
+                    class="form-control w-full"
+                  >
+                    <option value="">No store assignment</option>
+                    <option *ngFor="let store of availableStores" [value]="store._id">
+                      {{ store.name }} ({{ store.city }}, {{ store.state }})
+                    </option>
+                  </select>
+                </div>
+                <button 
+                  (click)="assignStore()"
+                  class="btn btn-primary"
+                  [disabled]="selectedStoreId === (employee.store_id || '') || assigningStore"
+                >
+                  <span *ngIf="assigningStore" class="mr-2">
+                    <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  </span>
+                  Assign Store
+                </button>
+              </div>
+              
+              <div *ngIf="storeUpdateMessage" class="mt-4" [ngClass]="{'alert-success': !storeUpdateError, 'alert-danger': storeUpdateError}" class="alert">
+                {{ storeUpdateMessage }}
+              </div>
+            </div>
+          </div>
+          
+          <!-- Employment Status (for admins and managers) -->
+          <div *appHasPermission="'employees:write'" class="border border-[var(--border-color)] rounded-lg overflow-hidden">
+            <div class="px-4 py-3 bg-[var(--bg-main)] border-b border-[var(--border-color)]">
+              <h3 class="text-md font-medium">Employment Status</h3>
+            </div>
+            <div class="p-4">
+              <p class="text-sm mb-4">Update the employee's employment status.</p>
+              
+              <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
+                <div class="flex-grow space-x-2">
+                  <button 
+                    (click)="changeStatus('active')" 
+                    [disabled]="employee.employment_status === 'active'"
+                    [ngClass]="{'bg-green-600': employee.employment_status === 'active'}"
+                    class="btn"
+                  >
+                    <svg *ngIf="employee.employment_status === 'active'" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Active
+                  </button>
+                  
+                  <button 
+                    (click)="changeStatus('on_leave')" 
+                    [disabled]="employee.employment_status === 'on_leave'"
+                    [ngClass]="{'bg-yellow-600': employee.employment_status === 'on_leave'}"
+                    class="btn"
+                  >
+                    <svg *ngIf="employee.employment_status === 'on_leave'" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    On Leave
+                  </button>
+                  
+                  <button 
+                    (click)="changeStatus('terminated')" 
+                    [disabled]="employee.employment_status === 'terminated'"
+                    [ngClass]="{'bg-red-600': employee.employment_status === 'terminated'}"
+                    class="btn"
+                  >
+                    <svg *ngIf="employee.employment_status === 'terminated'" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Terminated
+                  </button>
+                </div>
+              </div>
+              
+              <div *ngIf="statusUpdateMessage" class="mt-4" [ngClass]="{'alert-success': !statusUpdateError, 'alert-danger': statusUpdateError}" class="alert">
+                {{ statusUpdateMessage }}
+              </div>
+            </div>
+          </div>
+          
+          <!-- Danger Zone (for admins only) -->
+          <div *appHasPermission="'employees:delete'" class="border border-red-300 dark:border-red-700 rounded-lg overflow-hidden">
+            <div class="px-4 py-3 bg-red-50 dark:bg-red-900/30 border-b border-red-300 dark:border-red-700">
+              <h3 class="text-md font-medium text-red-800 dark:text-red-300">Danger Zone</h3>
+            </div>
+            <div class="p-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="font-medium">Delete this employee</p>
+                  <p class="text-sm text-[var(--text-secondary)]">
+                    Once deleted, all data will be permanently removed and cannot be recovered.
+                  </p>
+                </div>
+                <button 
+                  (click)="deleteEmployee()"
+                  class="btn btn-danger"
+                >
+                  Delete Employee
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>

@@ -17,7 +17,7 @@ export class PermissionService {
     private authService: AuthService,
     private http: HttpClient
   ) {
-    console.log('Permission Service: Initializing');
+    //console.log('Permission Service: Initializing');
     
     // Initialize permissions from current user if available
     this.initPermissions();
@@ -25,35 +25,35 @@ export class PermissionService {
     // Subscribe to user changes to update permissions
     this.authService.currentUser$.pipe(
       tap(user => {
-        console.log('Permission Service: User changed', user?.email);
+        //console.log('Permission Service: User changed', user?.email);
       }),
       filter(user => !!user)
     ).subscribe(user => {
-      console.log('Permission Service: User has role_id', user?.role_id);
+      //console.log('Permission Service: User has role_id', user?.role_id);
       // Use permissions directly from the user object if available
       if (user?.permissions) {
-        console.log('Permission Service: Using permissions from user object', user.permissions);
+       // console.log('Permission Service: Using permissions from user object', user.permissions);
         this.userPermissionsSubject.next(user.permissions);
       } else {
-        console.log('Permission Service: No permissions in user object');
+        //console.log('Permission Service: No permissions in user object');
         this.userPermissionsSubject.next([]);
       }
     });
   }
   
   private initPermissions(): void {
-    console.log('Permission Service: Initializing permissions');
+    //console.log('Permission Service: Initializing permissions');
     const user = this.authService.currentUser;
     if (user) {
-      console.log('Permission Service: User found in storage with role_id', user.role_id);
+      //console.log('Permission Service: User found in storage with role_id', user.role_id);
       if (user.permissions) {
-        console.log('Permission Service: Using permissions from storage', user.permissions);
+       // console.log('Permission Service: Using permissions from storage', user.permissions);
         this.userPermissionsSubject.next(user.permissions);
       } else {
-        console.log('Permission Service: No permissions found in stored user data');
+        //console.log('Permission Service: No permissions found in stored user data');
       }
     } else {
-      console.log('Permission Service: No user found in storage');
+      //console.log('Permission Service: No user found in storage');
     }
   }
   
@@ -63,7 +63,7 @@ export class PermissionService {
   hasPermission(permission: string): boolean {
     const permissions = this.userPermissionsSubject.value;
     const hasPermission = permissions.includes(permission);
-    console.log(`Permission check: "${permission}" - ${hasPermission ? 'Granted' : 'Denied'}`);
+    //console.log(`Permission check: "${permission}" - ${hasPermission ? 'Granted' : 'Denied'}`);
     return hasPermission;
   }
   
@@ -72,7 +72,7 @@ export class PermissionService {
    */
   hasAnyPermission(permissions: string[]): boolean {
     const result = permissions.some(permission => this.hasPermission(permission));
-    console.log(`Permission check (any): [${permissions.join(', ')}] - ${result ? 'Granted' : 'Denied'}`);
+    //console.log(`Permission check (any): [${permissions.join(', ')}] - ${result ? 'Granted' : 'Denied'}`);
     return result;
   }
   
@@ -81,7 +81,7 @@ export class PermissionService {
    */
   hasAllPermissions(permissions: string[]): boolean {
     const result = permissions.every(permission => this.hasPermission(permission));
-    console.log(`Permission check (all): [${permissions.join(', ')}] - ${result ? 'Granted' : 'Denied'}`);
+    //console.log(`Permission check (all): [${permissions.join(', ')}] - ${result ? 'Granted' : 'Denied'}`);
     return result;
   }
   
@@ -131,51 +131,51 @@ export class PermissionService {
    */
   getRoleIdentifier(): 'admin' | 'manager' | 'employee' | 'unknown' {
     const user = this.authService.currentUser;
-    console.log('Getting role identifier for user:', user?.email, 'with role ID:', user?.role_id);
+    //console.log('Getting role identifier for user:', user?.email, 'with role ID:', user?.role_id);
     
     if (!user) {
-      console.log('No user found, returning unknown role');
+      //console.log('No user found, returning unknown role');
       return 'unknown';
     }
     
     // Check role ID directly (more reliable than permission checks)
     if (user.role_id === '67c9fb4d9db05f47c32b6b22') {
-      console.log('Admin role ID detected');
+      //console.log('Admin role ID detected');
       return 'admin';
     }
     
     if (user.role_id === '67c9fb4d9db05f47c32b6b23') {
-      console.log('Manager role ID detected');
+      //console.log('Manager role ID detected');
       return 'manager';
     }
     
     if (user.role_id === '67c9fb4d9db05f47c32b6b24') {
-      console.log('Employee role ID detected');
+      //console.log('Employee role ID detected');
       return 'employee';
     }
     
     // Fallback to permission-based detection
-    console.log('Using permission-based role detection');
+    //console.log('Using permission-based role detection');
     
     // Check for admin permissions
     if (this.hasPermission('users:delete') && this.hasPermission('roles:write')) {
-      console.log('Admin permissions detected');
+      //console.log('Admin permissions detected');
       return 'admin';
     }
     
     // Check for manager permissions
     if (this.hasPermission('employees:approve') && this.hasPermission('hours:approve')) {
-      console.log('Manager permissions detected');
+      //console.log('Manager permissions detected');
       return 'manager';
     }
     
     // Default to employee if they have basic permissions
     if (this.hasPermission('hours:read')) {
-      console.log('Employee permissions detected');
+      //console.log('Employee permissions detected');
       return 'employee';
     }
     
-    console.log('No matching role pattern found, returning unknown');
+    //console.log('No matching role pattern found, returning unknown');
     return 'unknown';
   }
   
