@@ -48,6 +48,12 @@ export const routes: Routes = [
         data: { requiredPermission: 'stores:read' }
       },
       {
+        path: 'employees',
+        loadChildren: () => import('./features/employees/employees.routes').then(m => m.EMPLOYEE_ROUTES),
+        canActivate: [AuthGuard],
+        data: { requiredPermission: 'employees:read' }
+      },
+      {
         path: 'auth-test',
         loadComponent: () => import('./shared/components/auth-test/auth-test.component').then(m => m.AuthTestComponent)
       },
