@@ -1,17 +1,27 @@
-// src/app/features/hours/schedules/schedule-form/schedule-form.component.ts
+// src/app/features/schedules/schedule-form/schedule-form.component.ts
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { HoursService } from '../../../../core/services/hours.service';
-import { StoreService } from '../../../../core/services/store.service';
-import { EmployeeService } from '../../../../core/services/employee.service';
-import { AuthService } from '../../../../core/auth/auth.service';
-import { Schedule, ScheduleShift } from '../../../../shared/models/hours.model';
-import { Store } from '../../../../shared/models/store.model';
-import { Employee } from '../../../../shared/models/employee.model';
-import { ErrorHandlingService } from '../../../../core/utils/error-handling.service';
-import { DateTimeUtils } from '../../../../core/utils/date-time-utils.service';
+import { HoursService } from '../../../core/services/hours.service';
+import { StoreService } from '../../../core/services/store.service';
+import { EmployeeService } from '../../../core/services/employee.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { Schedule, ScheduleShift } from '../../../shared/models/hours.model';
+import { Store } from '../../../shared/models/store.model';
+import { Employee } from '../../../shared/models/employee.model';
+import { DateTimeUtils } from '../../../core/utils/date-time-utils.service';
+import { ErrorHandlingService } from '../../../core/utils/error-handling.service';
+import { v4 as uuidv4 } from 'uuid';
+
+interface ShiftFormData {
+  id: string;
+  day: string;
+  employee_id: string;
+  start_time: string;
+  end_time: string;
+  notes: string;
+}
 
 @Component({
   selector: 'app-schedule-form',
@@ -23,7 +33,7 @@ import { DateTimeUtils } from '../../../../core/utils/date-time-utils.service';
         <h1 class="page-title">{{ isEditMode ? 'Edit Schedule' : 'Create New Schedule' }}</h1>
         <div class="flex flex-col sm:flex-row gap-4">
           <button 
-            (click)="goBack()" 
+            (click)="navigateBack()" 
             class="btn btn-outline flex items-center"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -37,6 +47,11 @@ import { DateTimeUtils } from '../../../../core/utils/date-time-utils.service';
       <!-- Loading Indicator -->
       <div *ngIf="loading" class="flex justify-center my-10">
         <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+      </div>
+      
+      <!-- Error Message -->
+      <div *ngIf="error" class="alert alert-danger mb-6">
+        {{ error }}
       </div>
       
       <!-- Schedule Form -->
@@ -81,25 +96,30 @@ import { DateTimeUtils } from '../../../../core/utils/date-time-utils.service';
                 <input 
                   type="date" 
                   id="startDate" 
-                  [(ngModel)]="schedule.start_date" 
+                  [(ngModel)]="schedule.week_start_date" 
                   name="startDate"
                   class="form-control"
                   required
-                  (change)="generateDateRange()"
+                  (change)="updateEndDate()"
                 >
+                <div class="text-sm text-[var(--text-secondary)] mt-1">
+                  Should be a Monday for best results
+                </div>
               </div>
               
               <div class="form-group">
-                <label for="endDate" class="form-label required">End Date</label>
+                <label for="endDate" class="form-label">End Date</label>
                 <input 
                   type="date" 
                   id="endDate" 
-                  [(ngModel)]="schedule.end_date" 
+                  [(ngModel)]="schedule.week_end_date" 
                   name="endDate"
                   class="form-control"
-                  required
-                  (change)="generateDateRange()"
+                  readonly
                 >
+                <div class="text-sm text-[var(--text-secondary)] mt-1">
+                  Automatically set to Sunday (end of week)
+                </div>
               </div>
             </div>
             
@@ -111,31 +131,31 @@ import { DateTimeUtils } from '../../../../core/utils/date-time-utils.service';
               <div class="mb-4 border-b border-[var(--border-color)]">
                 <div class="flex overflow-x-auto">
                   <button 
-                    *ngFor="let date of dateRange" 
+                    *ngFor="let day of weekDays" 
                     type="button"
-                    [class.bg-[var(--bg-main)]]="selectedDate === date"
-                    [class.border-b-2]="selectedDate === date"
-                    [class.border-primary-500]="selectedDate === date"
-                    [class.font-medium]="selectedDate === date"
+                    [class.bg-[var(--bg-main)]]="selectedDay === day"
+                    [class.border-b-2]="selectedDay === day"
+                    [class.border-primary-500]="selectedDay === day"
+                    [class.font-medium]="selectedDay === day"
                     class="px-4 py-2 whitespace-nowrap"
-                    (click)="selectedDate = date"
+                    (click)="selectedDay = day"
                   >
-                    {{ formatDateForTab(date) }}
+                    {{ formatDayName(day) }}
                   </button>
                 </div>
               </div>
               
-              <!-- Shifts for selected date -->
-              <div *ngIf="selectedDate">
+              <!-- Shifts for selected day -->
+              <div *ngIf="selectedDay">
                 <h4 class="text-md font-medium mb-2">
-                  {{ formatDate(selectedDate) }} Shifts
+                  {{ formatDayName(selectedDay) }} Shifts
                   <span class="text-sm font-normal text-[var(--text-secondary)] ml-2">
-                    ({{ getShiftsForDate(selectedDate).length }} shifts)
+                    ({{ getDayShifts().length }} shifts)
                   </span>
                 </h4>
                 
                 <div class="space-y-4 mb-4">
-                  <div *ngFor="let shift of getShiftsForDate(selectedDate); let i = index" class="border rounded-md p-4 bg-[var(--bg-main)]">
+                  <div *ngFor="let shift of getDayShifts(); let i = index" class="border rounded-md p-4 bg-[var(--bg-main)]">
                     <div class="flex justify-between mb-2">
                       <h5 class="font-medium">Shift #{{ i + 1 }}</h5>
                       <button 
@@ -154,7 +174,7 @@ import { DateTimeUtils } from '../../../../core/utils/date-time-utils.service';
                         <label class="form-label required">Employee</label>
                         <select 
                           [(ngModel)]="shift.employee_id" 
-                          [name]="'employee_' + i"
+                          [name]="'employee_' + shift.id"
                           class="form-control"
                           required
                         >
@@ -170,7 +190,7 @@ import { DateTimeUtils } from '../../../../core/utils/date-time-utils.service';
                         <input 
                           type="time" 
                           [(ngModel)]="shift.start_time" 
-                          [name]="'start_time_' + i"
+                          [name]="'start_time_' + shift.id"
                           class="form-control"
                           required
                         >
@@ -181,7 +201,7 @@ import { DateTimeUtils } from '../../../../core/utils/date-time-utils.service';
                         <input 
                           type="time" 
                           [(ngModel)]="shift.end_time" 
-                          [name]="'end_time_' + i"
+                          [name]="'end_time_' + shift.id"
                           class="form-control"
                           required
                         >
@@ -193,7 +213,7 @@ import { DateTimeUtils } from '../../../../core/utils/date-time-utils.service';
                       <input 
                         type="text" 
                         [(ngModel)]="shift.notes" 
-                        [name]="'notes_' + i"
+                        [name]="'notes_' + shift.id"
                         class="form-control"
                         placeholder="Optional notes about this shift"
                       >
@@ -205,12 +225,12 @@ import { DateTimeUtils } from '../../../../core/utils/date-time-utils.service';
                 <button 
                   type="button" 
                   class="btn btn-outline w-full"
-                  (click)="addShift(selectedDate)"
+                  (click)="addShift()"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                   </svg>
-                  Add Shift for {{ formatDate(selectedDate) }}
+                  Add Shift for {{ formatDayName(selectedDay) }}
                 </button>
               </div>
             </div>
@@ -221,14 +241,14 @@ import { DateTimeUtils } from '../../../../core/utils/date-time-utils.service';
             <button 
               type="button" 
               class="btn btn-outline"
-              (click)="goBack()"
+              (click)="navigateBack()"
             >
               Cancel
             </button>
             <button 
               type="submit" 
               class="btn btn-primary"
-              [disabled]="!schedule.store_id || !schedule.title || !schedule.start_date || !schedule.end_date"
+              [disabled]="!isFormValid()"
             >
               {{ isEditMode ? 'Update Schedule' : 'Create Schedule' }}
             </button>
@@ -240,31 +260,29 @@ import { DateTimeUtils } from '../../../../core/utils/date-time-utils.service';
 })
 export class ScheduleFormComponent implements OnInit {
   loading = true;
+  error = '';
   isEditMode = false;
   scheduleId = '';
   
   // Form data
-  schedule: Schedule = {
+  schedule: Partial<Schedule> = {
     title: '',
     store_id: '',
-    start_date: '',
-    end_date: '',
+    week_start_date: '',
+    week_end_date: '',
     shifts: [],
     created_by: ''
   };
+  
+  shifts: ShiftFormData[] = [];
   
   // Reference data
   stores: Store[] = [];
   employees: Employee[] = [];
   
   // UI state
-  dateRange: string[] = [];
-  selectedDate = '';
-  
-  // Helper methods
-  getShiftsForDate(date: string): ScheduleShift[] {
-    return this.schedule.shifts.filter(shift => shift.date === date);
-  }
+  weekDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  selectedDay = 'monday';
   
   constructor(
     private hoursService: HoursService,
@@ -281,19 +299,16 @@ export class ScheduleFormComponent implements OnInit {
     
     if (this.isEditMode) {
       this.scheduleId = this.route.snapshot.paramMap.get('id') || '';
+      if (!this.scheduleId) {
+        this.error = 'No schedule ID provided for editing';
+        this.loading = false;
+        return;
+      }
     }
     
     // Set default dates if creating a new schedule
     if (!this.isEditMode) {
-      const today = new Date();
-      const nextSunday = new Date(today);
-      nextSunday.setDate(today.getDate() + (7 - today.getDay()) % 7);
-      
-      const nextSaturday = new Date(nextSunday);
-      nextSaturday.setDate(nextSunday.getDate() + 6);
-      
-      this.schedule.start_date = DateTimeUtils.formatDateForAPI(nextSunday);
-      this.schedule.end_date = DateTimeUtils.formatDateForAPI(nextSaturday);
+      this.setDefaultDates();
       
       // Set the current user as the creator
       const currentUser = this.authService.currentUser;
@@ -310,9 +325,28 @@ export class ScheduleFormComponent implements OnInit {
     if (this.isEditMode && this.scheduleId) {
       this.loadSchedule();
     } else {
-      this.generateDateRange();
       this.loading = false;
     }
+  }
+  
+  setDefaultDates(): void {
+    // Set start date to next Monday
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    
+    // Calculate days until next Monday (if today is Monday, use today)
+    const daysUntilMonday = dayOfWeek === 1 ? 0 : (8 - dayOfWeek) % 7;
+    
+    const nextMonday = new Date(today);
+    nextMonday.setDate(today.getDate() + daysUntilMonday);
+    
+    // Set end date to Sunday (6 days after Monday)
+    const nextSunday = new Date(nextMonday);
+    nextSunday.setDate(nextMonday.getDate() + 6);
+    
+    // Format dates for input
+    this.schedule.week_start_date = nextMonday.toISOString().split('T')[0];
+    this.schedule.week_end_date = nextSunday.toISOString().split('T')[0];
   }
   
   loadStores(): void {
@@ -322,7 +356,7 @@ export class ScheduleFormComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error loading stores:', err);
-        alert(ErrorHandlingService.getErrorMessage(err));
+        this.error = ErrorHandlingService.getErrorMessage(err);
       }
     });
   }
@@ -334,7 +368,7 @@ export class ScheduleFormComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error loading employees:', err);
-        alert(ErrorHandlingService.getErrorMessage(err));
+        this.error = ErrorHandlingService.getErrorMessage(err);
       }
     });
   }
@@ -342,173 +376,153 @@ export class ScheduleFormComponent implements OnInit {
   loadSchedule(): void {
     this.hoursService.getSchedule(this.scheduleId).subscribe({
       next: (schedule) => {
-        this.schedule = schedule;
-        this.generateDateRange();
+        this.schedule = { ...schedule };
+        
+        // Convert shifts to form data format
+        this.shifts = schedule.shifts.map(shift => ({
+          id: shift._id || uuidv4(),
+          day: shift.day_of_week,
+          employee_id: shift.employee_id,
+          start_time: shift.start_time,
+          end_time: shift.end_time,
+          notes: shift.notes || ''
+        }));
+        
         this.loading = false;
       },
       error: (err) => {
         console.error('Error loading schedule:', err);
-        alert(ErrorHandlingService.getErrorMessage(err));
+        this.error = ErrorHandlingService.getErrorMessage(err);
         this.loading = false;
       }
     });
   }
   
-  generateDateRange(): void {
-    if (!this.schedule.start_date || !this.schedule.end_date) {
-      this.dateRange = [];
-      return;
-    }
+  updateEndDate(): void {
+    if (!this.schedule.week_start_date) return;
     
-    const start = new Date(this.schedule.start_date);
-    const end = new Date(this.schedule.end_date);
-    const range: string[] = [];
+    // Set end date to 6 days after start date
+    const startDate = new Date(this.schedule.week_start_date);
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
     
-    let current = new Date(start);
-    
-    // Loop through each day between start and end dates
-    while (current <= end) {
-      range.push(DateTimeUtils.formatDateForAPI(current));
-      current.setDate(current.getDate() + 1);
-    }
-    
-    this.dateRange = range;
-    
-    // Set the selected date to the first date if not already set
-    if (!this.selectedDate || !this.dateRange.includes(this.selectedDate)) {
-      this.selectedDate = this.dateRange[0] || '';
-    }
+    // Format date for input
+    this.schedule.week_end_date = endDate.toISOString().split('T')[0];
   }
   
-  addShift(date: string): void {
-    // Create a new shift for the selected date
-    const newShift: ScheduleShift = {
+  getDayShifts(): ShiftFormData[] {
+    return this.shifts.filter(shift => shift.day === this.selectedDay);
+  }
+  
+  addShift(): void {
+    // Create a new shift
+    const newShift: ShiftFormData = {
+      id: uuidv4(),
+      day: this.selectedDay,
       employee_id: '',
-      date: date,
       start_time: '09:00',  // Default start time
       end_time: '17:00',    // Default end time
+      notes: ''
     };
     
-    this.schedule.shifts.push(newShift);
+    this.shifts.push(newShift);
   }
   
-  removeShift(shift: ScheduleShift): void {
-    this.schedule.shifts = this.schedule.shifts.filter(s => s !== shift);
+  removeShift(shift: ShiftFormData): void {
+    this.shifts = this.shifts.filter(s => s.id !== shift.id);
   }
   
-  saveSchedule(): void {
-    // Validate the schedule before saving
-    if (!this.validateSchedule()) {
-      return;
-    }
-    
-    this.loading = true;
-    
-    if (this.isEditMode) {
-      // Update existing schedule
-      this.hoursService.updateSchedule(this.scheduleId, this.schedule).subscribe({
-        next: (updatedSchedule) => {
-          console.log('Update successful:', updatedSchedule);
-          this.loading = false;
-          
-          // Verify if all shifts were saved correctly
-          if (updatedSchedule.shifts?.length !== this.schedule.shifts?.length) {
-            console.warn(`Warning: Server returned ${updatedSchedule.shifts?.length} shifts, but ${this.schedule.shifts?.length} were sent.`);
-          }
-          
-          // Add a slight delay before navigating to ensure state updates are complete
-          setTimeout(() => {
-            this.navigateToScheduleList();
-          }, 300);
-        },
-        error: (err) => {
-          console.error('Error updating schedule:', err);
-          alert(ErrorHandlingService.getErrorMessage(err));
-          this.loading = false;
-        }
-      });
-    } else {
-      // Create new schedule
-      this.hoursService.createSchedule(this.schedule).subscribe({
-        next: (newSchedule) => {
-          console.log('Creation successful:', newSchedule);
-          this.loading = false;
-          
-          // Verify if all shifts were saved correctly
-          if (newSchedule.shifts?.length !== this.schedule.shifts?.length) {
-            console.warn(`Warning: Server returned ${newSchedule.shifts?.length} shifts, but ${this.schedule.shifts?.length} were sent.`);
-          }
-          
-          // Add a slight delay before navigating
-          setTimeout(() => {
-            this.navigateToScheduleList();
-          }, 300);
-        },
-        error: (err) => {
-          console.error('Error creating schedule:', err);
-          alert(ErrorHandlingService.getErrorMessage(err));
-          this.loading = false;
-        }
-      });
-    }
-  }
-    
-  validateSchedule(): boolean {
-    // Basic validation
-    if (!this.schedule.title) {
-      alert('Please enter a schedule title');
+  isFormValid(): boolean {
+    // Check required fields
+    if (!this.schedule.title || !this.schedule.store_id || !this.schedule.week_start_date) {
       return false;
     }
     
-    if (!this.schedule.store_id) {
-      alert('Please select a store');
-      return false;
-    }
-    
-    if (!this.schedule.start_date || !this.schedule.end_date) {
-      alert('Please select start and end dates');
-      return false;
-    }
-    
-    // Validate shifts
-    for (const shift of this.schedule.shifts) {
-      if (!shift.employee_id) {
-        alert('Please select an employee for all shifts');
+    // Check if all shifts have required fields
+    for (const shift of this.shifts) {
+      if (!shift.employee_id || !shift.start_time || !shift.end_time) {
         return false;
       }
       
-      if (!shift.start_time || !shift.end_time) {
-        alert('Please enter start and end times for all shifts');
-        return false;
-      }
-      
-      // Validate that end time is after start time
-      if (!DateTimeUtils.isValidTimeRange(shift.start_time, shift.end_time)) {
-        alert('End time must be after start time for all shifts');
-        return false;
+      // Validate start time is before end time
+      if (shift.start_time >= shift.end_time) {
+        // Allow overnight shifts where end time is less than start time
+        // This is a simplification - a real implementation would need more validation
+        if (shift.start_time !== '23:00' || shift.end_time !== '00:00') {
+          return false;
+        }
       }
     }
     
     return true;
   }
   
-  goBack(): void {
-    this.navigateToScheduleList();
+  saveSchedule(): void {
+    if (!this.isFormValid()) {
+      this.error = 'Please fill out all required fields';
+      return;
+    }
+    
+    this.loading = true;
+    
+    // Convert form shifts to model shifts
+    const scheduleShifts = this.shifts.map(shift => ({
+      employee_id: shift.employee_id,
+      day_of_week: shift.day,
+      start_time: shift.start_time,
+      end_time: shift.end_time,
+      notes: shift.notes
+    }));
+    
+    // Update schedule with shifts
+    const scheduleData: Partial<Schedule> = {
+      ...this.schedule,
+      shifts: scheduleShifts
+    };
+    
+    if (this.isEditMode) {
+      // Update existing schedule
+      this.hoursService.updateSchedule(this.scheduleId, scheduleData).subscribe({
+        next: (updatedSchedule) => {
+          this.navigateToScheduleList();
+        },
+        error: (err) => {
+          console.error('Error updating schedule:', err);
+          this.error = ErrorHandlingService.getErrorMessage(err);
+          this.loading = false;
+        }
+      });
+    } else {
+      // Create new schedule
+      this.hoursService.createSchedule(scheduleData).subscribe({
+        next: (newSchedule) => {
+          this.navigateToScheduleList();
+        },
+        error: (err) => {
+          console.error('Error creating schedule:', err);
+          this.error = ErrorHandlingService.getErrorMessage(err);
+          this.loading = false;
+        }
+      });
+    }
+  }
+  
+  navigateBack(): void {
+    // Use window.history to go back if possible
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      // Otherwise navigate to the schedule list
+      this.navigateToScheduleList();
+    }
   }
   
   navigateToScheduleList(): void {
-    // Add a timestamp parameter to force a refresh of the list
-    this.router.navigate(['/hours/schedules'], {
-      queryParams: { refresh: Date.now() }
-    });
+    this.router.navigate(['/schedules']);
   }
   
-  // Helper methods using DateTimeUtils
-  formatDate(dateStr: string): string {
-    return DateTimeUtils.formatDateForDisplay(dateStr);
-  }
-  
-  formatDateForTab(dateStr: string): string {
-    return DateTimeUtils.formatDateForDisplay(dateStr, { weekday: 'short', day: 'numeric' });
+  // Helper methods
+  formatDayName(day: string): string {
+    return day.charAt(0).toUpperCase() + day.slice(1);
   }
 }

@@ -1,4 +1,4 @@
-// src/app/shared/utils/id-utils.service.ts
+// src/app/core/utils/id-utils.service.ts
 import { Injectable } from '@angular/core';
 
 @Injectable({
@@ -32,7 +32,7 @@ export class IdUtils {
         if (key.includes('_id') || key === 'id') {
           result[key] = this.ensureString(params[key]);
         } else {
-          result[key] = params[key];
+          result[key] = String(params[key]);
         }
       }
     }

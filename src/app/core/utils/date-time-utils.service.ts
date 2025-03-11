@@ -1,4 +1,4 @@
-// src/app/shared/utils/date-time-utils.service.ts
+// src/app/core/utils/date-time-utils.service.ts
 import { Injectable } from '@angular/core';
 
 @Injectable({
@@ -89,6 +89,18 @@ export class DateTimeUtils {
   }
 
   /**
+   * Convert minutes to HH:MM format
+   */
+  public static minutesToTimeStr(minutes: number): string {
+    if (minutes < 0) return '00:00';
+    
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+  }
+
+  /**
    * Validate if end time is after start time
    */
   public static isValidTimeRange(startTime: string, endTime: string): boolean {
@@ -120,7 +132,7 @@ export class DateTimeUtils {
    * Format minutes as hours (decimal)
    */
   public static minutesToHours(minutes: number): number {
-    if (!minutes) return 0;
+    if (!minutes && minutes !== 0) return 0;
     return minutes / 60;
   }
 
@@ -128,7 +140,7 @@ export class DateTimeUtils {
    * Format minutes as "Xh Ym" string
    */
   public static formatDuration(minutes: number): string {
-    if (!minutes) return '0h';
+    if (!minutes && minutes !== 0) return '0h';
     
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
@@ -136,5 +148,37 @@ export class DateTimeUtils {
     if (hours === 0) return `${mins}m`;
     if (mins === 0) return `${hours}h`;
     return `${hours}h ${mins}m`;
+  }
+  
+  /**
+   * Get day of week (name) from date
+   */
+  public static getDayOfWeek(date: Date | string): string {
+    try {
+      const dateObj = typeof date === 'string' ? new Date(date) : date;
+      const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      return days[dateObj.getDay()];
+    } catch (error) {
+      console.error('Error getting day of week:', error);
+      return '';
+    }
+  }
+  
+  /**
+   * Get dates for each day of the week containing the given date
+   */
+  public static getWeekDays(date: Date): Date[] {
+    const result: Date[] = [];
+    const day = date.getDay() || 7; // Convert Sunday (0) to 7
+    const monday = new Date(date);
+    monday.setDate(date.getDate() - day + 1); // +1 to start with Monday
+    
+    for (let i = 0; i < 7; i++) {
+      const currentDay = new Date(monday);
+      currentDay.setDate(monday.getDate() + i);
+      result.push(currentDay);
+    }
+    
+    return result;
   }
 }

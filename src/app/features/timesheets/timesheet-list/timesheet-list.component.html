@@ -1,0 +1,257 @@
+<div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">My Timesheets</h1>
+      <div class="flex flex-col sm:flex-row gap-4">
+        <a 
+          routerLink="/timesheets/current" 
+          class="btn btn-primary flex items-center"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+          Current Week Timesheet
+        </a>
+        
+        <a 
+          *appHasPermission="'hours:approve'"
+          routerLink="/timesheets/approval" 
+          class="btn btn-outline flex items-center"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          Approve Timesheets
+        </a>
+      </div>
+    </div>
+    
+    <!-- Filter Controls -->
+    <div class="card mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="form-group">
+          <label for="storeFilter" class="form-label">Store</label>
+          <select 
+            id="storeFilter" 
+            [(ngModel)]="storeFilter" 
+            (change)="loadTimesheets()"
+            class="form-control"
+          >
+            <option value="">All Stores</option>
+            <option *ngFor="let store of stores" [value]="store._id">
+              {{ store.name }}
+            </option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="statusFilter" class="form-label">Status</label>
+          <select 
+            id="statusFilter" 
+            [(ngModel)]="statusFilter" 
+            (change)="loadTimesheets()"
+            class="form-control"
+          >
+            <option value="">All Statuses</option>
+            <option value="draft">Draft</option>
+            <option value="submitted">Pending Approval</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="dateRangeFilter" class="form-label">Date Range</label>
+          <select 
+            id="dateRangeFilter" 
+            [(ngModel)]="dateRangeFilter" 
+            (change)="applyDateRangeFilter()"
+            class="form-control"
+          >
+            <option value="past-month">Past Month</option>
+            <option value="past-3-months">Past 3 Months</option>
+            <option value="past-6-months">Past 6 Months</option>
+            <option value="past-year">Past Year</option>
+            <option value="custom">Custom Range</option>
+          </select>
+        </div>
+      </div>
+      
+      <!-- Custom Date Range -->
+      <div *ngIf="dateRangeFilter === 'custom'" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <div class="form-group">
+          <label for="startDate" class="form-label">Start Date</label>
+          <input 
+            type="date" 
+            id="startDate" 
+            [(ngModel)]="startDate" 
+            (change)="loadTimesheets()"
+            class="form-control"
+          >
+        </div>
+        
+        <div class="form-group">
+          <label for="endDate" class="form-label">End Date</label>
+          <input 
+            type="date" 
+            id="endDate" 
+            [(ngModel)]="endDate" 
+            (change)="loadTimesheets()"
+            class="form-control"
+          >
+        </div>
+      </div>
+    </div>
+    
+    <!-- Loading Indicator -->
+    <div *ngIf="loading" class="flex justify-center my-10">
+      <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+    </div>
+    
+    <!-- Current Timesheet Card -->
+    <div *ngIf="!loading && currentTimesheet" class="card mb-6">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold">Current Week Timesheet</h2>
+        <span 
+          [ngClass]="{
+            'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': currentTimesheet.status === 'approved',
+            'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': currentTimesheet.status === 'submitted',
+            'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300': currentTimesheet.status === 'draft',
+            'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': currentTimesheet.status === 'rejected'
+          }"
+          class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+        >
+          {{ currentTimesheet.status | titlecase }}
+        </span>
+      </div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <div class="text-sm text-[var(--text-secondary)]">Week</div>
+          <div>{{ formatDate(currentTimesheet.week_start_date) }} - {{ formatDate(currentTimesheet.week_end_date) }}</div>
+        </div>
+        <div>
+          <div class="text-sm text-[var(--text-secondary)]">Store</div>
+          <div>{{ currentTimesheet.store_name }}</div>
+        </div>
+      </div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <div class="text-sm text-[var(--text-secondary)]">Total Hours</div>
+          <div class="text-lg font-semibold">{{ currentTimesheet.total_hours }} hours</div>
+        </div>
+        <div>
+          <div class="text-sm text-[var(--text-secondary)]">Total Earnings</div>
+          <div class="text-lg font-semibold">${{ currentTimesheet.total_earnings.toFixed(2) }}</div>
+        </div>
+      </div>
+      
+      <div class="flex justify-end">
+        <a 
+          routerLink="/timesheets/current" 
+          class="btn btn-primary"
+        >
+          View Details
+        </a>
+      </div>
+    </div>
+    
+    <!-- Timesheets List -->
+    <div class="card">
+      <h2 class="text-lg font-semibold mb-4">Timesheet History</h2>
+      
+      <!-- Empty state -->
+      <div *ngIf="!loading && (!timesheets || timesheets.length === 0)" class="text-center py-8 text-[var(--text-secondary)]">
+        No timesheets found matching your filters.
+      </div>
+      
+      <!-- Timesheets list -->
+      <div *ngIf="!loading && timesheets && timesheets.length > 0" class="space-y-4">
+        <div *ngFor="let timesheet of timesheets; trackBy: trackByTimesheetId" class="border rounded-lg overflow-hidden bg-[var(--bg-card)]">
+          <div class="border-b border-[var(--border-color)] px-4 py-3 flex justify-between items-center">
+            <div>
+              <h3 class="font-medium">Week of {{ formatDate(timesheet.week_start_date) }}</h3>
+              <p class="text-sm text-[var(--text-secondary)]">
+                {{ formatDate(timesheet.week_start_date) }} - {{ formatDate(timesheet.week_end_date) }}
+              </p>
+            </div>
+            <div>
+              <span 
+                [ngClass]="{
+                  'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': timesheet.status === 'approved',
+                  'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': timesheet.status === 'submitted',
+                  'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300': timesheet.status === 'draft',
+                  'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': timesheet.status === 'rejected'
+                }"
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+              >
+                {{ timesheet.status | titlecase }}
+              </span>
+            </div>
+          </div>
+          
+          <div class="px-4 py-3">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <div class="text-sm text-[var(--text-secondary)]">Store</div>
+                <div>{{ timesheet.store_name }}</div>
+              </div>
+              <div>
+                <div class="text-sm text-[var(--text-secondary)]">Total Hours</div>
+                <div>{{ timesheet.total_hours }} hours</div>
+              </div>
+              <div>
+                <div class="text-sm text-[var(--text-secondary)]">Total Earnings</div>
+                <div>${{ timesheet.total_earnings.toFixed(2) }}</div>
+              </div>
+            </div>
+            
+            <!-- If rejected, show reason -->
+            <div *ngIf="timesheet.status === 'rejected' && timesheet.rejection_reason" class="mt-2 p-2 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200 rounded-md text-sm">
+              <span class="font-medium">Rejected: </span>{{ timesheet.rejection_reason }}
+            </div>
+          </div>
+          
+          <div class="bg-[var(--bg-main)] px-4 py-3 border-t border-[var(--border-color)]">
+            <div class="flex justify-end">
+              <a 
+                [routerLink]="['/timesheets', timesheet._id]" 
+                class="btn btn-sm btn-outline"
+              >
+                View Details
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Pagination controls -->
+      <div *ngIf="!loading && timesheets && timesheets.length > 0" class="flex justify-between items-center mt-6">
+        <div>
+          <span class="text-sm text-[var(--text-secondary)]">
+            Showing {{ timesheets.length }} of {{ totalTimesheets }} timesheets
+          </span>
+        </div>
+        
+        <div class="flex space-x-2">
+          <button 
+            (click)="previousPage()" 
+            class="btn btn-sm btn-outline"
+            [disabled]="currentPage === 1"
+          >
+            Previous
+          </button>
+          <span class="flex items-center px-3">
+            Page {{ currentPage }}
+          </span>
+          <button 
+            (click)="nextPage()" 
+            class="btn btn-sm btn-outline"
+            [disabled]="timesheets.length < pageSize"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
