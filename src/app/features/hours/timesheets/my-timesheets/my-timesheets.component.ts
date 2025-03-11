@@ -308,37 +308,57 @@ export class MyTimesheetsComponent implements OnInit {
   loadTimeEntries(): void {
     this.loading = true;
     
-    const employeeId = this.getEmployeeId();
-    if (!employeeId) {
+    // Get the current user
+    const currentUser = this.authService.currentUser;
+    if (!currentUser) {
+      console.error('No authenticated user found');
       this.loading = false;
       return;
     }
     
-    const options: any = {
-      employee_id: employeeId,
-      skip: (this.currentPage - 1) * this.pageSize,
-      limit: this.pageSize
-    };
-    
-    if (this.startDate) {
-      options.start_date = this.startDate;
-    }
-    
-    if (this.endDate) {
-      options.end_date = this.endDate;
-    }
-    
-    if (this.statusFilter) {
-      options.status = this.statusFilter;
-    }
-    
-    this.hoursService.getTimeEntries(options).subscribe({
-      next: (entries) => {
-        this.timeEntries = entries;
-        this.loading = false;
+    // First get the employee ID asynchronously
+    this.hoursService.getCurrentEmployeeId().subscribe({
+      next: (employeeId) => {
+        if (!employeeId) {
+          console.log('No employee ID found for current user');
+          this.timeEntries = []; // Empty array since there's no employee
+          this.loading = false;
+          return;
+        }
+        
+        const options: any = {
+          employee_id: employeeId,
+          skip: (this.currentPage - 1) * this.pageSize,
+          limit: this.pageSize
+        };
+        
+        if (this.startDate) {
+          options.start_date = this.startDate;
+        }
+        
+        if (this.endDate) {
+          options.end_date = this.endDate;
+        }
+        
+        if (this.statusFilter) {
+          options.status = this.statusFilter;
+        }
+        
+        this.hoursService.getTimeEntries(options).subscribe({
+          next: (entries) => {
+            this.timeEntries = entries;
+            this.loading = false;
+          },
+          error: (err) => {
+            console.error('Error loading time entries:', err);
+            this.timeEntries = []; // Empty array on error
+            this.loading = false;
+          }
+        });
       },
       error: (err) => {
-        console.error('Error loading time entries:', err);
+        console.error('Error getting employee ID:', err);
+        this.timeEntries = []; // Empty array on error
         this.loading = false;
       }
     });
@@ -374,14 +394,21 @@ export class MyTimesheetsComponent implements OnInit {
     }
   }
   
-  getEmployeeId(): string {
+  getEmployeeId(): string | null {
+    // Get the current user
     const currentUser = this.authService.currentUser;
     if (!currentUser) {
       console.error('No authenticated user found');
-      return '';
+      return null;
     }
-    return currentUser._id;
+    
+    // Don't immediately return the user ID
+    // Instead, we'll use the hoursService.getCurrentEmployeeId() method
+    
+    // For now, return null - we'll change the approach of this function
+    return null;
   }
+  
   
   getBreakDuration(entry: TimeEntry): string {
     if (!entry.break_start || !entry.break_end) {

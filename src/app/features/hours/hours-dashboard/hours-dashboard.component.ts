@@ -7,6 +7,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { PermissionService } from '../../../core/auth/permission.service';
 import { TimeEntry, WeeklyTimesheet } from '../../../shared/models/hours.model';
 import { HasPermissionDirective } from '../../../shared/directives/has-permission.directive';
+import { catchError, finalize, of } from 'rxjs';
 
 @Component({
   selector: 'app-hours-dashboard',
@@ -52,7 +53,7 @@ import { HasPermissionDirective } from '../../../shared/directives/has-permissio
       <!-- Hours Dashboard Content -->
       <div *ngIf="!loading" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Left Column: Quick Summary -->
-        <div class="lg:col-span-1">
+        <div class="lg:col-span-1" *ngIf="!isAdmin">
           <!-- Time Clock Status Card -->
           <div class="card mb-6">
             <h2 class="text-lg font-semibold mb-4">Time Clock Status</h2>
@@ -170,6 +171,30 @@ import { HasPermissionDirective } from '../../../shared/directives/has-permissio
           </div>
         </div>
         
+        <!-- Admin Welcome Card (For Admin Users) -->
+        <div class="lg:col-span-1" *ngIf="isAdmin">
+          <div class="card mb-6">
+            <h2 class="text-lg font-semibold mb-4">Welcome, Admin</h2>
+            <p class="text-[var(--text-secondary)] mb-4">
+              As an administrator, you have access to manage hours, schedules, and approvals for all employees.
+            </p>
+            <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-md text-blue-800 dark:text-blue-200">
+              <div class="flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p class="font-medium">Admin Functions</p>
+              </div>
+              <ul class="mt-2 ml-7 list-disc">
+                <li>Manage employee schedules</li>
+                <li>Approve timesheets and hours</li>
+                <li>Generate reports</li>
+                <li>Configure system settings</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        
         <!-- Right Column - Manager View -->
         <div class="lg:col-span-2">
           <!-- Pending Approvals for Managers -->
@@ -214,7 +239,7 @@ import { HasPermissionDirective } from '../../../shared/directives/has-permissio
             </div>
           </div>
           
-          <!-- Schedule Overview for Everyone -->
+          <!-- Schedule Overview -->
           <div class="card">
             <div class="flex justify-between items-center mb-4">
               <h2 class="text-lg font-semibold">Current Schedule</h2>
@@ -266,6 +291,11 @@ export class HoursDashboardComponent implements OnInit {
   pendingTimesheets: WeeklyTimesheet[] = [];
   upcomingShifts: any[] = []; // Use ScheduleShift type when implemented
   
+  // Role indicators
+  isAdmin = false;
+  isManager = false;
+  isEmployee = false;
+  
   // For the weekly summary
   weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   currentWeekStats: {
@@ -282,6 +312,11 @@ export class HoursDashboardComponent implements OnInit {
   ) {}
   
   ngOnInit(): void {
+    // Determine user roles
+    this.isAdmin = this.permissionService.isAdmin();
+    this.isManager = this.permissionService.hasPermission('hours:approve');
+    this.isEmployee = this.permissionService.hasPermission('hours:write') && !this.isAdmin;
+    
     this.loadDashboardData();
   }
   
@@ -296,34 +331,56 @@ export class HoursDashboardComponent implements OnInit {
       return;
     }
     
-    // For demonstration purposes, we'll use the user ID as employee ID
-    // In a real application, you would get the employee ID associated with the user
-    const employeeId = currentUser._id;
+    // For managers, load pending timesheets
+    if (this.isManager) {
+      this.loadPendingTimesheets();
+    }
     
-    // Get active time entry
+    // For regular employees, load their time data
+    if (this.isEmployee) {
+      // Get the employee ID asynchronously
+      this.hoursService.getCurrentEmployeeId().subscribe({
+        next: (employeeId) => {
+          if (employeeId) {
+            // Load active time entry
+            this.loadActiveTimeEntry(employeeId);
+            
+            // Load recent time entries
+            this.loadRecentTimeEntries(employeeId);
+            
+            // Load current week stats
+            this.calculateCurrentWeekStats(employeeId);
+            
+            // Load upcoming shifts
+            this.loadUpcomingShifts(employeeId);
+          } else {
+            console.log('No employee record found for current user');
+            this.loading = false;
+          }
+        },
+        error: (err) => {
+          console.error('Error getting current employee ID:', err);
+          this.loading = false;
+        }
+      });
+    } else {
+      // For admin users, just finish loading
+      this.loading = false;
+    }
+  }
+  
+  loadActiveTimeEntry(employeeId: string): void {
     this.hoursService.getActiveTimeEntry(employeeId).subscribe({
       next: (entry) => {
         this.activeTimeEntry = entry;
-        
-        // Load recent time entries
-        this.loadRecentTimeEntries(employeeId);
-        
-        // Load current week stats
-        this.calculateCurrentWeekStats(employeeId);
-        
-        // For managers, load pending timesheets
-        if (this.permissionService.hasPermission('hours:approve')) {
-          this.loadPendingTimesheets();
-        }
-        
-        // Load upcoming shifts
-        this.loadUpcomingShifts(employeeId);
-        
-        this.loading = false;
       },
       error: (err) => {
         console.error('Error fetching active time entry:', err);
-        this.loading = false;
+        this.activeTimeEntry = null;
+      },
+      complete: () => {
+        // Reduce loading count when this operation completes
+        this.checkLoading();
       }
     });
   }
@@ -344,6 +401,9 @@ export class HoursDashboardComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error fetching recent time entries:', err);
+      },
+      complete: () => {
+        this.checkLoading();
       }
     });
   }
@@ -392,6 +452,9 @@ export class HoursDashboardComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error calculating current week stats:', err);
+      },
+      complete: () => {
+        this.checkLoading();
       }
     });
   }
@@ -406,6 +469,9 @@ export class HoursDashboardComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error fetching pending timesheets:', err);
+      },
+      complete: () => {
+        this.checkLoading();
       }
     });
   }
@@ -425,8 +491,17 @@ export class HoursDashboardComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error fetching upcoming shifts:', err);
+      },
+      complete: () => {
+        this.checkLoading();
       }
     });
+  }
+  
+  // Helper method to check if all data has been loaded
+  checkLoading(): void {
+    // Set loading to false as operations complete
+    this.loading = false;
   }
   
   clockOut(timeEntryId: string): void {
