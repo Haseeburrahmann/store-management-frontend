@@ -10,6 +10,8 @@ import { AuthService } from '../../../../core/auth/auth.service';
 import { Schedule, ScheduleShift } from '../../../../shared/models/hours.model';
 import { Store } from '../../../../shared/models/store.model';
 import { Employee } from '../../../../shared/models/employee.model';
+import { ErrorHandlingService } from '../../../../core/utils/error-handling.service';
+import { DateTimeUtils } from '../../../../core/utils/date-time-utils.service';
 
 @Component({
   selector: 'app-schedule-form',
@@ -264,16 +266,6 @@ export class ScheduleFormComponent implements OnInit {
     return this.schedule.shifts.filter(shift => shift.date === date);
   }
   
-  formatDate(dateStr: string): string {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
-  }
-  
-  formatDateForTab(dateStr: string): string {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
-  }
-  
   constructor(
     private hoursService: HoursService,
     private storeService: StoreService,
@@ -300,8 +292,8 @@ export class ScheduleFormComponent implements OnInit {
       const nextSaturday = new Date(nextSunday);
       nextSaturday.setDate(nextSunday.getDate() + 6);
       
-      this.schedule.start_date = nextSunday.toISOString().split('T')[0];
-      this.schedule.end_date = nextSaturday.toISOString().split('T')[0];
+      this.schedule.start_date = DateTimeUtils.formatDateForAPI(nextSunday);
+      this.schedule.end_date = DateTimeUtils.formatDateForAPI(nextSaturday);
       
       // Set the current user as the creator
       const currentUser = this.authService.currentUser;
@@ -330,7 +322,7 @@ export class ScheduleFormComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error loading stores:', err);
-        alert('Failed to load stores. Please try again later.');
+        alert(ErrorHandlingService.getErrorMessage(err));
       }
     });
   }
@@ -342,7 +334,7 @@ export class ScheduleFormComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error loading employees:', err);
-        alert('Failed to load employees. Please try again later.');
+        alert(ErrorHandlingService.getErrorMessage(err));
       }
     });
   }
@@ -356,7 +348,7 @@ export class ScheduleFormComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error loading schedule:', err);
-        alert('Failed to load schedule. Please try again later.');
+        alert(ErrorHandlingService.getErrorMessage(err));
         this.loading = false;
       }
     });
@@ -376,7 +368,7 @@ export class ScheduleFormComponent implements OnInit {
     
     // Loop through each day between start and end dates
     while (current <= end) {
-      range.push(current.toISOString().split('T')[0]);
+      range.push(DateTimeUtils.formatDateForAPI(current));
       current.setDate(current.getDate() + 1);
     }
     
@@ -410,41 +402,6 @@ export class ScheduleFormComponent implements OnInit {
       return;
     }
     
-    // Ensure ALL shifts have complete data structure
-    if (this.schedule.shifts) {
-      this.schedule.shifts = this.schedule.shifts.map(shift => {
-        // Create a new object that matches the ScheduleShift interface
-        const normalizedShift: ScheduleShift = {
-          employee_id: shift.employee_id,
-          date: shift.date,
-          start_time: shift.start_time,
-          end_time: shift.end_time
-        };
-        
-        // Add optional properties according to the interface
-        if (shift._id) {
-          normalizedShift._id = shift._id;
-        } else {
-          normalizedShift._id = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-        }
-        
-        // Handle notes - convert null to undefined to match interface
-        if (shift.notes !== null) {
-          normalizedShift.notes = shift.notes;
-        }
-        
-        // Copy employee_name if it exists
-        if (shift.employee_name) {
-          normalizedShift.employee_name = shift.employee_name;
-        }
-        
-        return normalizedShift;
-      });
-    }
-    
-    // Log what we're about to submit
-    console.log('Submitting schedule update:', JSON.stringify(this.schedule));
-    
     this.loading = true;
     
     if (this.isEditMode) {
@@ -466,7 +423,7 @@ export class ScheduleFormComponent implements OnInit {
         },
         error: (err) => {
           console.error('Error updating schedule:', err);
-          alert('Failed to update schedule. Please try again later.');
+          alert(ErrorHandlingService.getErrorMessage(err));
           this.loading = false;
         }
       });
@@ -489,7 +446,7 @@ export class ScheduleFormComponent implements OnInit {
         },
         error: (err) => {
           console.error('Error creating schedule:', err);
-          alert('Failed to create schedule. Please try again later.');
+          alert(ErrorHandlingService.getErrorMessage(err));
           this.loading = false;
         }
       });
@@ -526,10 +483,7 @@ export class ScheduleFormComponent implements OnInit {
       }
       
       // Validate that end time is after start time
-      const [startHours, startMinutes] = shift.start_time.split(':').map(Number);
-      const [endHours, endMinutes] = shift.end_time.split(':').map(Number);
-      
-      if (endHours < startHours || (endHours === startHours && endMinutes <= startMinutes)) {
+      if (!DateTimeUtils.isValidTimeRange(shift.start_time, shift.end_time)) {
         alert('End time must be after start time for all shifts');
         return false;
       }
@@ -547,5 +501,14 @@ export class ScheduleFormComponent implements OnInit {
     this.router.navigate(['/hours/schedules'], {
       queryParams: { refresh: Date.now() }
     });
+  }
+  
+  // Helper methods using DateTimeUtils
+  formatDate(dateStr: string): string {
+    return DateTimeUtils.formatDateForDisplay(dateStr);
+  }
+  
+  formatDateForTab(dateStr: string): string {
+    return DateTimeUtils.formatDateForDisplay(dateStr, { weekday: 'short', day: 'numeric' });
   }
 }

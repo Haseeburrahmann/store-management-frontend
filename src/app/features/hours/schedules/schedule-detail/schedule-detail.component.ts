@@ -77,7 +77,7 @@ interface DaySchedule {
                 {{ schedule.store_name }}
               </div>
               <div class="text-sm text-[var(--text-secondary)] mt-1">
-                Total Shifts: {{ schedule.shifts?.length || 0 }}
+                Total Shifts: {{ schedule.shifts.length || 0 }}
               </div>
             </div>
           </div>

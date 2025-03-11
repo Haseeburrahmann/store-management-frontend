@@ -5,6 +5,9 @@ import { RouterLink } from '@angular/router';
 import { HoursService } from '../../../../core/services/hours.service';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { PermissionService } from '../../../../core/auth/permission.service';
+import { IdUtils } from '../../../../core/utils/id-utils.service';
+import { forkJoin, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 
 @Component({
   selector: 'app-hours-stats-widget',
@@ -71,10 +74,11 @@ export class HoursStatsWidgetComponent implements OnInit {
   }
   
   loadHoursStats(): void {
+    console.log('Loading hours stats');
+    
     // Get current user or all employees based on role
     const isAdmin = this.permissionService.isAdmin();
     const isManager = this.permissionService.isManager();
-    const currentUser = this.authService.currentUser;
     
     // Get current and previous week date ranges
     const currentWeekDates = this.getWeekDateRange(0);
@@ -82,95 +86,131 @@ export class HoursStatsWidgetComponent implements OnInit {
     
     if (isAdmin || isManager) {
       // For admins and managers, get all hours for their scope
+      console.log('Loading hours for admin/manager view');
       this.loadAllHours(currentWeekDates, previousWeekDates);
-    } else if (currentUser) {
-      // For regular employees, just get their own hours
-      this.loadEmployeeHours(currentUser._id, currentWeekDates, previousWeekDates);
     } else {
-      this.loading = false;
+      // For regular employees, get the employee ID from the current user
+      console.log('Getting employee ID for regular employee view');
+      this.hoursService.getCurrentEmployeeId().subscribe({
+        next: (employeeId) => {
+          if (employeeId) {
+            console.log('Found employee ID:', employeeId);
+            // Use the employee ID instead of user ID
+            this.loadEmployeeHours(employeeId, currentWeekDates, previousWeekDates);
+          } else {
+            console.log('No employee record found for current user');
+            this.loading = false;
+          }
+        },
+        error: (err) => {
+          console.error('Error getting current employee ID:', err);
+          this.loading = false;
+        }
+      });
     }
   }
   
   loadAllHours(currentWeekDates: { start: string, end: string }, previousWeekDates: { start: string, end: string }): void {
+    console.log('Loading all hours for date range:', currentWeekDates);
+    
     // For managers and admins, load all time entries they have access to
     // For managers, this might be filtered by store in a real implementation
-    this.hoursService.getTimeEntries({
+    const currentRequest = this.hoursService.getTimeEntries({
       start_date: currentWeekDates.start,
       end_date: currentWeekDates.end
+    }).pipe(
+      catchError(err => {
+        console.error('Error loading current week hours:', err);
+        return of([]);
+      })
+    );
+    
+    const previousRequest = this.hoursService.getTimeEntries({
+      start_date: previousWeekDates.start,
+      end_date: previousWeekDates.end
+    }).pipe(
+      catchError(err => {
+        console.error('Error loading previous week hours:', err);
+        return of([]);
+      })
+    );
+    
+    // Use forkJoin to make both requests simultaneously
+    forkJoin({
+      current: currentRequest,
+      previous: previousRequest
     }).subscribe({
-      next: (currentEntries) => {
-        // Calculate total current week hours
-        const currentHours = this.calculateTotalHours(currentEntries);
+      next: (results) => {
+        const currentHours = this.calculateTotalHours(results.current);
+        const previousHours = this.calculateTotalHours(results.previous);
         
-        // Load previous week for comparison
-        this.hoursService.getTimeEntries({
-          start_date: previousWeekDates.start,
-          end_date: previousWeekDates.end
-        }).subscribe({
-          next: (previousEntries) => {
-            const previousHours = this.calculateTotalHours(previousEntries);
-            
-            this.totalHours = currentHours;
-            
-            // Calculate percent change
-            if (previousHours > 0) {
-              this.percentChange = ((currentHours - previousHours) / previousHours) * 100;
-            }
-            
-            this.loading = false;
-          },
-          error: (err) => {
-            console.error('Error loading previous week hours:', err);
-            this.totalHours = currentHours;
-            this.loading = false;
-          }
-        });
+        console.log(`Calculated hours - Current: ${currentHours}, Previous: ${previousHours}`);
+        
+        this.totalHours = currentHours;
+        
+        // Calculate percent change
+        if (previousHours > 0) {
+          this.percentChange = ((currentHours - previousHours) / previousHours) * 100;
+        }
+        
+        this.loading = false;
       },
       error: (err) => {
-        console.error('Error loading current week hours:', err);
+        console.error('Error in hours calculation:', err);
         this.loading = false;
       }
     });
   }
   
   loadEmployeeHours(employeeId: string, currentWeekDates: { start: string, end: string }, previousWeekDates: { start: string, end: string }): void {
-    // For regular employees, just load their own time entries
-    this.hoursService.getTimeEntries({
-      employee_id: employeeId,
+    // Ensure employeeId is string format
+    const safeEmployeeId = IdUtils.ensureString(employeeId);
+    console.log('Loading hours for employee ID:', safeEmployeeId);
+    
+    const currentRequest = this.hoursService.getTimeEntries({
+      employee_id: safeEmployeeId,
       start_date: currentWeekDates.start,
       end_date: currentWeekDates.end
+    }).pipe(
+      catchError(err => {
+        console.error(`Error loading current week hours for employee ${safeEmployeeId}:`, err);
+        return of([]);
+      })
+    );
+    
+    const previousRequest = this.hoursService.getTimeEntries({
+      employee_id: safeEmployeeId,
+      start_date: previousWeekDates.start,
+      end_date: previousWeekDates.end
+    }).pipe(
+      catchError(err => {
+        console.error(`Error loading previous week hours for employee ${safeEmployeeId}:`, err);
+        return of([]);
+      })
+    );
+    
+    // Use forkJoin to make both requests simultaneously
+    forkJoin({
+      current: currentRequest,
+      previous: previousRequest
     }).subscribe({
-      next: (currentEntries) => {
-        // Calculate total current week hours
-        const currentHours = this.calculateTotalHours(currentEntries);
+      next: (results) => {
+        const currentHours = this.calculateTotalHours(results.current);
+        const previousHours = this.calculateTotalHours(results.previous);
         
-        // Load previous week for comparison
-        this.hoursService.getTimeEntries({
-          employee_id: employeeId,
-          start_date: previousWeekDates.start,
-          end_date: previousWeekDates.end
-        }).subscribe({
-          next: (previousEntries) => {
-            const previousHours = this.calculateTotalHours(previousEntries);
-            
-            this.totalHours = currentHours;
-            
-            // Calculate percent change
-            if (previousHours > 0) {
-              this.percentChange = ((currentHours - previousHours) / previousHours) * 100;
-            }
-            
-            this.loading = false;
-          },
-          error: (err) => {
-            console.error('Error loading previous week hours:', err);
-            this.totalHours = currentHours;
-            this.loading = false;
-          }
-        });
+        console.log(`Calculated hours for employee ${safeEmployeeId} - Current: ${currentHours}, Previous: ${previousHours}`);
+        
+        this.totalHours = currentHours;
+        
+        // Calculate percent change
+        if (previousHours > 0) {
+          this.percentChange = ((currentHours - previousHours) / previousHours) * 100;
+        }
+        
+        this.loading = false;
       },
       error: (err) => {
-        console.error('Error loading current week hours:', err);
+        console.error(`Error in hours calculation for employee ${safeEmployeeId}:`, err);
         this.loading = false;
       }
     });

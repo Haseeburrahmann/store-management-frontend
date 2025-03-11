@@ -9,6 +9,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { TimeEntry } from '../../../shared/models/hours.model';
 import { Store } from '../../../shared/models/store.model';
 import { interval, Observable, Subscription } from 'rxjs';
+import { DateTimeUtils } from '../../../core/utils/date-time-utils.service';
 
 @Component({
   selector: 'app-time-clock',
@@ -274,17 +275,13 @@ export class TimeClockComponent implements OnInit {
       return;
     }
     
-    // For demonstration purposes, we'll use the user ID as employee ID
-    // In a real application, you would get the employee ID associated with the user
-    const employeeId = currentUser._id;
-    
     // Load all stores
     this.storeService.getActiveStores().subscribe({
       next: (stores) => {
         this.availableStores = stores;
         
         // Check for active time entry
-        this.hoursService.getActiveTimeEntry(employeeId).subscribe({
+        this.hoursService.getActiveTimeEntry().subscribe({
           next: (entry) => {
             this.activeTimeEntry = entry;
             
@@ -300,10 +297,19 @@ export class TimeClockComponent implements OnInit {
               }
             }
             
-            // Load recent time entries
-            this.loadRecentTimeEntries(employeeId);
+            // Load recent time entries using employee ID from active entry
+            if (entry) {
+              this.loadRecentTimeEntries(entry.employee_id);
+            } else {
+              // Try to get employee ID from auth service
+              this.hoursService.getCurrentEmployeeId().subscribe(employeeId => {
+                if (employeeId) {
+                  this.loadRecentTimeEntries(employeeId);
+                }
+                this.loading = false;
+              });
+            }
             
-            this.loading = false;
           },
           error: (err) => {
             console.error('Error fetching active time entry:', err);
@@ -326,9 +332,11 @@ export class TimeClockComponent implements OnInit {
     }).subscribe({
       next: (entries) => {
         this.recentTimeEntries = entries;
+        this.loading = false;
       },
       error: (err) => {
         console.error('Error fetching recent time entries:', err);
+        this.loading = false;
       }
     });
   }
@@ -355,14 +363,8 @@ export class TimeClockComponent implements OnInit {
   }
   
   updateSessionDuration(startTimeStr: string): void {
-    const startTime = new Date(startTimeStr);
-    const now = new Date();
-    const durationMinutes = Math.floor((now.getTime() - startTime.getTime()) / (1000 * 60));
-    
-    const hours = Math.floor(durationMinutes / 60);
-    const minutes = durationMinutes % 60;
-    
-    this.sessionDuration = `${hours}h ${minutes}m`;
+    const durationMinutes = DateTimeUtils.calculateDurationMinutes(startTimeStr, new Date().toISOString());
+    this.sessionDuration = DateTimeUtils.formatDuration(durationMinutes);
   }
   
   startBreakTimer(startTimeStr: string): void {
@@ -381,18 +383,8 @@ export class TimeClockComponent implements OnInit {
   }
   
   updateBreakDuration(startTimeStr: string): void {
-    const startTime = new Date(startTimeStr);
-    const now = new Date();
-    const durationMinutes = Math.floor((now.getTime() - startTime.getTime()) / (1000 * 60));
-    
-    const hours = Math.floor(durationMinutes / 60);
-    const minutes = durationMinutes % 60;
-    
-    if (hours > 0) {
-      this.breakDuration = `${hours}h ${minutes}m`;
-    } else {
-      this.breakDuration = `${minutes}m`;
-    }
+    const durationMinutes = DateTimeUtils.calculateDurationMinutes(startTimeStr, new Date().toISOString());
+    this.breakDuration = DateTimeUtils.formatDuration(durationMinutes);
   }
   
   clockIn(): void {
@@ -407,10 +399,9 @@ export class TimeClockComponent implements OnInit {
         this.startSessionTimer(entry.clock_in);
         this.clockInNotes = '';
         
-        // Reload recent time entries
-        const employeeId = this.authService.currentUser?._id;
-        if (employeeId) {
-          this.loadRecentTimeEntries(employeeId);
+        // Reload recent time entries using the employee ID from the new entry
+        if (entry && entry.employee_id) {
+          this.loadRecentTimeEntries(entry.employee_id);
         }
       },
       error: (err) => {
@@ -421,7 +412,7 @@ export class TimeClockComponent implements OnInit {
   }
   
   clockOut(): void {
-    if (!this.activeTimeEntry) {
+    if (!this.activeTimeEntry || !this.activeTimeEntry._id) {
       return;
     }
     
@@ -430,18 +421,20 @@ export class TimeClockComponent implements OnInit {
       return;
     }
     
-    this.hoursService.clockOut(this.activeTimeEntry._id as string, this.clockOutNotes).subscribe({
+    this.hoursService.clockOut(this.activeTimeEntry._id, this.clockOutNotes).subscribe({
       next: (entry) => {
         // Stop session timer
         if (this.sessionTimerSubscription) {
           this.sessionTimerSubscription.unsubscribe();
         }
         
+        // Capture employee_id for recent entries reload
+        const employeeId = this.activeTimeEntry?.employee_id;
+        
         this.activeTimeEntry = null;
         this.clockOutNotes = '';
         
         // Reload recent time entries
-        const employeeId = this.authService.currentUser?._id;
         if (employeeId) {
           this.loadRecentTimeEntries(employeeId);
         }
@@ -454,14 +447,14 @@ export class TimeClockComponent implements OnInit {
   }
   
   startBreak(): void {
-    if (!this.activeTimeEntry) {
+    if (!this.activeTimeEntry || !this.activeTimeEntry._id) {
       return;
     }
     
     const now = new Date().toISOString();
     
     // Update the time entry with break start time
-    this.hoursService.updateTimeEntry(this.activeTimeEntry._id as string, {
+    this.hoursService.updateTimeEntry(this.activeTimeEntry._id, {
       break_start: now
     }).subscribe({
       next: (entry) => {
@@ -478,14 +471,14 @@ export class TimeClockComponent implements OnInit {
   }
   
   endBreak(): void {
-    if (!this.activeTimeEntry) {
+    if (!this.activeTimeEntry || !this.activeTimeEntry._id) {
       return;
     }
     
     const now = new Date().toISOString();
     
     // Update the time entry with break end time
-    this.hoursService.updateTimeEntry(this.activeTimeEntry._id as string, {
+    this.hoursService.updateTimeEntry(this.activeTimeEntry._id, {
       break_end: now
     }).subscribe({
       next: (entry) => {
@@ -506,12 +499,10 @@ export class TimeClockComponent implements OnInit {
   
   // Helper methods for formatting dates and times
   formatDate(dateTimeStr: string): string {
-    const date = new Date(dateTimeStr);
-    return date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    return DateTimeUtils.formatDateForDisplay(dateTimeStr);
   }
   
   formatTime(dateTimeStr: string): string {
-    const date = new Date(dateTimeStr);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return DateTimeUtils.formatTimeForDisplay(dateTimeStr);
   }
 }

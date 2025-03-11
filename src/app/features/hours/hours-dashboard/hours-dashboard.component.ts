@@ -8,6 +8,7 @@ import { PermissionService } from '../../../core/auth/permission.service';
 import { TimeEntry, WeeklyTimesheet } from '../../../shared/models/hours.model';
 import { HasPermissionDirective } from '../../../shared/directives/has-permission.directive';
 import { catchError, finalize, of } from 'rxjs';
+import { IdUtils } from '../../../core/utils/id-utils.service';
 
 @Component({
   selector: 'app-hours-dashboard',
@@ -317,6 +318,12 @@ export class HoursDashboardComponent implements OnInit {
     this.isManager = this.permissionService.hasPermission('hours:approve');
     this.isEmployee = this.permissionService.hasPermission('hours:write') && !this.isAdmin;
     
+    console.log('User roles:', {
+      isAdmin: this.isAdmin,
+      isManager: this.isManager,
+      isEmployee: this.isEmployee
+    });
+    
     this.loadDashboardData();
   }
   
@@ -331,8 +338,10 @@ export class HoursDashboardComponent implements OnInit {
       return;
     }
     
-    // For managers, load pending timesheets
-    if (this.isManager) {
+    console.log('Current user:', currentUser);
+    
+    // For managers and admins, load pending timesheets
+    if (this.isManager || this.isAdmin) {
       this.loadPendingTimesheets();
     }
     
@@ -342,6 +351,8 @@ export class HoursDashboardComponent implements OnInit {
       this.hoursService.getCurrentEmployeeId().subscribe({
         next: (employeeId) => {
           if (employeeId) {
+            console.log('Found employee ID:', employeeId);
+            
             // Load active time entry
             this.loadActiveTimeEntry(employeeId);
             
@@ -370,8 +381,13 @@ export class HoursDashboardComponent implements OnInit {
   }
   
   loadActiveTimeEntry(employeeId: string): void {
-    this.hoursService.getActiveTimeEntry(employeeId).subscribe({
+    // Ensure employeeId is string format
+    const safeEmployeeId = IdUtils.ensureString(employeeId);
+    console.log('Loading active time entry for employee:', safeEmployeeId);
+    
+    this.hoursService.getActiveTimeEntry(safeEmployeeId).subscribe({
       next: (entry) => {
+        console.log('Active time entry:', entry);
         this.activeTimeEntry = entry;
       },
       error: (err) => {
@@ -379,24 +395,28 @@ export class HoursDashboardComponent implements OnInit {
         this.activeTimeEntry = null;
       },
       complete: () => {
-        // Reduce loading count when this operation completes
         this.checkLoading();
       }
     });
   }
   
   loadRecentTimeEntries(employeeId: string): void {
+    // Ensure employeeId is string format
+    const safeEmployeeId = IdUtils.ensureString(employeeId);
+    console.log('Loading recent time entries for employee:', safeEmployeeId);
+    
     // Get the last 7 days of time entries
     const endDate = new Date().toISOString().split('T')[0];
     const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     
     this.hoursService.getTimeEntries({
-      employee_id: employeeId,
+      employee_id: safeEmployeeId,
       start_date: startDate,
       end_date: endDate,
       limit: 5
     }).subscribe({
       next: (entries) => {
+        console.log(`Fetched ${entries.length} recent time entries`);
         this.recentTimeEntries = entries;
       },
       error: (err) => {
@@ -409,16 +429,22 @@ export class HoursDashboardComponent implements OnInit {
   }
   
   calculateCurrentWeekStats(employeeId: string): void {
+    // Ensure employeeId is string format
+    const safeEmployeeId = IdUtils.ensureString(employeeId);
+    console.log('Calculating current week stats for employee:', safeEmployeeId);
+    
     const now = new Date();
     const weekStart = this.hoursService.getStartOfWeek(now);
     const weekEnd = this.hoursService.getEndOfWeek(now);
     
     this.hoursService.getTimeEntries({
-      employee_id: employeeId,
+      employee_id: safeEmployeeId,
       start_date: weekStart.toISOString().split('T')[0],
       end_date: weekEnd.toISOString().split('T')[0]
     }).subscribe({
       next: (entries) => {
+        console.log(`Fetched ${entries.length} entries for week stats`);
+        
         if (entries.length === 0) {
           this.currentWeekStats = null;
           return;
@@ -449,6 +475,8 @@ export class HoursDashboardComponent implements OnInit {
           totalHours: totalHours,
           dailyHours: dailyHours
         };
+        
+        console.log('Week stats calculated:', this.currentWeekStats);
       },
       error: (err) => {
         console.error('Error calculating current week stats:', err);
@@ -460,34 +488,122 @@ export class HoursDashboardComponent implements OnInit {
   }
   
   loadPendingTimesheets(): void {
-    this.hoursService.getTimesheets({
-      status: 'submitted',
-      limit: 5
-    }).subscribe({
-      next: (timesheets) => {
-        this.pendingTimesheets = timesheets;
-      },
-      error: (err) => {
-        console.error('Error fetching pending timesheets:', err);
-      },
-      complete: () => {
-        this.checkLoading();
-      }
-    });
+    console.log('Loading pending timesheets for approval');
+    
+    // Different handling for managers/admins vs regular employees
+    if (this.isManager || this.isAdmin) {
+      // For managers and admins, load all pending timesheets
+      this.hoursService.getTimesheets({
+        status: 'pending', // Try 'pending' first
+        limit: 10
+      }).subscribe({
+        next: (pendingTimesheets) => {
+          console.log(`Fetched ${pendingTimesheets.length} pending timesheets with status 'pending'`);
+          
+          // If no timesheets with 'pending' status, try 'submitted' status
+          if (pendingTimesheets.length === 0) {
+            this.hoursService.getTimesheets({
+              status: 'submitted',
+              limit: 10
+            }).subscribe({
+              next: (submittedTimesheets) => {
+                console.log(`Fetched ${submittedTimesheets.length} pending timesheets with status 'submitted'`);
+                this.pendingTimesheets = submittedTimesheets;
+              },
+              error: (err) => {
+                console.error('Error fetching submitted timesheets:', err);
+              },
+              complete: () => {
+                this.checkLoading();
+              }
+            });
+          } else {
+            this.pendingTimesheets = pendingTimesheets;
+            this.checkLoading();
+          }
+        },
+        error: (err) => {
+          console.error('Error fetching pending timesheets:', err);
+          
+          // Fallback to 'submitted' status if error with 'pending'
+          this.hoursService.getTimesheets({
+            status: 'submitted',
+            limit: 10
+          }).subscribe({
+            next: (submittedTimesheets) => {
+              console.log(`Fetched ${submittedTimesheets.length} pending timesheets with status 'submitted'`);
+              this.pendingTimesheets = submittedTimesheets;
+            },
+            error: (secondErr) => {
+              console.error('Error fetching submitted timesheets:', secondErr);
+            },
+            complete: () => {
+              this.checkLoading();
+            }
+          });
+        }
+      });
+    } else {
+      // For regular employees, only get their own pending timesheets
+      this.hoursService.getCurrentEmployeeId().subscribe({
+        next: (employeeId) => {
+          if (employeeId) {
+            const safeEmployeeId = IdUtils.ensureString(employeeId);
+            console.log('Loading personal pending timesheets for employee:', safeEmployeeId);
+            
+            // Try both statuses to ensure we catch all pending timesheets
+            this.hoursService.getTimesheets({
+              employee_id: safeEmployeeId,
+              status: 'submitted',
+              limit: 5
+            }).subscribe({
+              next: (timesheets) => {
+                console.log(`Fetched ${timesheets.length} personal pending timesheets`);
+                this.pendingTimesheets = timesheets;
+                this.checkLoading();
+              },
+              error: (err) => {
+                console.error('Error fetching personal timesheets:', err);
+                this.checkLoading();
+              }
+            });
+          } else {
+            console.log('No employee ID found for current user');
+            this.checkLoading();
+          }
+        },
+        error: (err) => {
+          console.error('Error getting employee ID:', err);
+          this.checkLoading();
+        }
+      });
+    }
   }
   
   loadUpcomingShifts(employeeId: string): void {
-    // Get current date in YYYY-MM-DD format
-    const today = new Date().toISOString().split('T')[0];
+    // Ensure employeeId is string format and properly logged
+    const safeEmployeeId = IdUtils.ensureString(employeeId);
+    console.log('Loading shifts specifically for employee ID:', safeEmployeeId);
     
-    // Get date 7 days from now
+    // Get current date and next week
+    const today = new Date().toISOString().split('T')[0];
     const nextWeek = new Date();
     nextWeek.setDate(nextWeek.getDate() + 7);
     const nextWeekStr = nextWeek.toISOString().split('T')[0];
     
-    this.hoursService.getEmployeeSchedule(employeeId, today, nextWeekStr).subscribe({
+    // Make sure you're explicitly requesting shifts for THIS employee only
+    this.hoursService.getEmployeeSchedule(safeEmployeeId, today, nextWeekStr).subscribe({
       next: (shifts) => {
-        this.upcomingShifts = shifts;
+        console.log(`Fetched ${shifts.length} shifts specifically for employee ID: ${safeEmployeeId}`);
+        // Verify each shift belongs to this employee
+        shifts.forEach(shift => {
+          if (IdUtils.ensureString(shift.employee_id) !== safeEmployeeId) {
+            console.error('Found shift for wrong employee:', shift);
+          }
+        });
+        this.upcomingShifts = shifts.filter(shift => 
+          IdUtils.ensureString(shift.employee_id) === safeEmployeeId
+        );
       },
       error: (err) => {
         console.error('Error fetching upcoming shifts:', err);
@@ -497,6 +613,7 @@ export class HoursDashboardComponent implements OnInit {
       }
     });
   }
+  
   
   // Helper method to check if all data has been loaded
   checkLoading(): void {

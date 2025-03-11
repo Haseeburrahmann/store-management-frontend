@@ -6,6 +6,9 @@ import { FormsModule } from '@angular/forms';
 import { HoursService } from '../../../../core/services/hours.service';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { TimeEntry, WeeklyTimesheet } from '../../../../shared/models/hours.model';
+import { catchError, map, Observable, of } from 'rxjs';
+import { DateTimeUtils } from '../../../../core/utils/date-time-utils.service';
+import { ErrorHandlingService } from '../../../../core/utils/error-handling.service';
 
 @Component({
   selector: 'app-my-timesheets',
@@ -252,6 +255,7 @@ export class MyTimesheetsComponent implements OnInit {
   startDate: string;
   endDate: string;
   statusFilter = '';
+  error: string | undefined;
   
   constructor(
     private hoursService: HoursService,
@@ -259,11 +263,11 @@ export class MyTimesheetsComponent implements OnInit {
   ) {
     // Set default date range to the last 30 days
     const today = new Date();
-    this.endDate = today.toISOString().split('T')[0];
+    this.endDate = DateTimeUtils.formatDateForAPI(today);
     
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    this.startDate = thirtyDaysAgo.toISOString().split('T')[0];
+    this.startDate = DateTimeUtils.formatDateForAPI(thirtyDaysAgo);
   }
   
   ngOnInit(): void {
@@ -272,20 +276,30 @@ export class MyTimesheetsComponent implements OnInit {
   }
   
   loadCurrentWeekTimesheet(): void {
-    const employeeId = this.getEmployeeId();
-    if (!employeeId) return;
-    
-    this.hoursService.getCurrentTimesheet(employeeId).subscribe({
-      next: (timesheet) => {
-        this.currentTimesheet = timesheet;
-        
-        if (timesheet) {
-          // Load time entries for the current timesheet
-          this.loadCurrentWeekEntries(employeeId, timesheet.week_start_date, timesheet.week_end_date);
+    // Get the employee ID asynchronously
+    this.hoursService.getCurrentEmployeeId().subscribe({
+      next: (employeeId) => {
+        if (!employeeId) {
+          console.log('No employee ID found for current user');
+          return;
         }
+        
+        this.hoursService.getCurrentTimesheet(employeeId).subscribe({
+          next: (timesheet) => {
+            this.currentTimesheet = timesheet;
+            
+            if (timesheet) {
+              // Load time entries for the current timesheet
+              this.loadCurrentWeekEntries(employeeId, timesheet.week_start_date, timesheet.week_end_date);
+            }
+          },
+          error: (err) => {
+            console.error('Error loading current timesheet:', err);
+          }
+        });
       },
       error: (err) => {
-        console.error('Error loading current timesheet:', err);
+        console.error('Error getting current employee ID:', err);
       }
     });
   }
@@ -308,15 +322,7 @@ export class MyTimesheetsComponent implements OnInit {
   loadTimeEntries(): void {
     this.loading = true;
     
-    // Get the current user
-    const currentUser = this.authService.currentUser;
-    if (!currentUser) {
-      console.error('No authenticated user found');
-      this.loading = false;
-      return;
-    }
-    
-    // First get the employee ID asynchronously
+    // Get the employee ID asynchronously
     this.hoursService.getCurrentEmployeeId().subscribe({
       next: (employeeId) => {
         if (!employeeId) {
@@ -351,6 +357,7 @@ export class MyTimesheetsComponent implements OnInit {
           },
           error: (err) => {
             console.error('Error loading time entries:', err);
+            this.error = ErrorHandlingService.getErrorMessage(err);
             this.timeEntries = []; // Empty array on error
             this.loading = false;
           }
@@ -376,6 +383,7 @@ export class MyTimesheetsComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error submitting timesheet:', err);
+        alert(ErrorHandlingService.getErrorMessage(err));
       }
     });
   }
@@ -394,54 +402,25 @@ export class MyTimesheetsComponent implements OnInit {
     }
   }
   
-  getEmployeeId(): string | null {
-    // Get the current user
-    const currentUser = this.authService.currentUser;
-    if (!currentUser) {
-      console.error('No authenticated user found');
-      return null;
-    }
-    
-    // Don't immediately return the user ID
-    // Instead, we'll use the hoursService.getCurrentEmployeeId() method
-    
-    // For now, return null - we'll change the approach of this function
-    return null;
-  }
-  
-  
   getBreakDuration(entry: TimeEntry): string {
     if (!entry.break_start || !entry.break_end) {
       return 'None';
     }
     
-    const breakStart = new Date(entry.break_start);
-    const breakEnd = new Date(entry.break_end);
-    const breakMinutes = Math.floor((breakEnd.getTime() - breakStart.getTime()) / (1000 * 60));
-    
-    if (breakMinutes < 60) {
-      return `${breakMinutes}m`;
-    } else {
-      const hours = Math.floor(breakMinutes / 60);
-      const minutes = breakMinutes % 60;
-      return `${hours}h ${minutes > 0 ? minutes + 'm' : ''}`;
-    }
+    const breakMinutes = DateTimeUtils.calculateDurationMinutes(entry.break_start, entry.break_end);
+    return DateTimeUtils.formatDuration(breakMinutes);
   }
   
   formatHours(minutes?: number): string {
     if (!minutes) return '0h';
-    
-    const hours = minutes / 60;
-    return `${hours.toFixed(1)}h`;
+    return DateTimeUtils.formatDuration(minutes);
   }
   
   formatDate(dateStr: string): string {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString();
+    return DateTimeUtils.formatDateForDisplay(dateStr);
   }
   
   formatTime(dateStr: string): string {
-    const date = new Date(dateStr);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return DateTimeUtils.formatTimeForDisplay(dateStr);
   }
 }

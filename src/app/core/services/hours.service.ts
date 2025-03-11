@@ -1,4 +1,4 @@
-
+// src/app/core/services/hours.service.ts
 
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
@@ -9,6 +9,9 @@ import { EmployeeService } from './employee.service';
 import { StoreService } from './store.service';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../auth/permission.service';
+import { IdUtils } from '../../core/utils/id-utils.service';
+import { DateTimeUtils } from '../../core/utils/date-time-utils.service';
+import { ErrorHandlingService } from '../../core/utils/error-handling.service';
 
 @Injectable({
   providedIn: 'root'
@@ -47,20 +50,36 @@ export class HoursService {
       return of([]); // Return empty array for admin users
     }
     
+    // If employee_id is provided, ensure it's a string and log it
+    if (options.employee_id) {
+      options.employee_id = IdUtils.ensureString(options.employee_id);
+      console.log(`getTimeEntries: Requesting entries for employee ID: ${options.employee_id}`);
+    }
+    
+    // Ensure all IDs are strings
+    const safeParams = IdUtils.createIdParams(options);
     let params = new HttpParams();
     
-    if (options.employee_id) params = params.set('employee_id', options.employee_id);
-    if (options.store_id) params = params.set('store_id', options.store_id);
-    if (options.start_date) params = params.set('start_date', options.start_date);
-    if (options.end_date) params = params.set('end_date', options.end_date);
-    if (options.status) params = params.set('status', options.status);
-    if (options.skip !== undefined) params = params.set('skip', options.skip.toString());
-    if (options.limit !== undefined) params = params.set('limit', options.limit.toString());
+    Object.keys(safeParams).forEach(key => {
+      params = params.set(key, safeParams[key]);
+    });
     
     return this.http.get<TimeEntry[]>(this.timeEntriesUrl, { params }).pipe(
       tap(entries => console.log(`Fetched ${entries.length} time entries`)),
+      // Add an extra filter on the frontend if employee_id was specified
+      map(entries => {
+        if (options.employee_id) {
+          return entries.filter(entry => 
+            IdUtils.ensureString(entry.employee_id) === options.employee_id
+          );
+        }
+        return entries;
+      }),
       switchMap(entries => this.enhanceTimeEntries(entries)),
-      catchError(this.handleError<TimeEntry[]>('getTimeEntries', []))
+      catchError(error => {
+        console.error(`getTimeEntries failed: ${error.message}`);
+        return of([]);
+      })
     );
   }
   
@@ -69,7 +88,7 @@ export class HoursService {
    */
   getTimeEntry(id: string): Observable<TimeEntry> {
     // Ensure ID is string format
-    const safeId = id.toString();
+    const safeId = IdUtils.ensureString(id);
     const url = `${this.timeEntriesUrl}/${safeId}`;
     
     return this.http.get<TimeEntry>(url).pipe(
@@ -77,7 +96,7 @@ export class HoursService {
       switchMap(entry => this.enhanceTimeEntries([entry]).pipe(
         map(entries => entries[0])
       )),
-      catchError(this.handleError<TimeEntry>(`getTimeEntry id=${safeId}`))
+      catchError(ErrorHandlingService.handleError<TimeEntry>(`getTimeEntry id=${safeId}`))
     );
   }
   
@@ -85,14 +104,12 @@ export class HoursService {
    * Create a new time entry
    */
   createTimeEntry(entry: Partial<TimeEntry>): Observable<TimeEntry> {
-    // Make sure store_id and employee_id are strings
-    const safeEntry = { ...entry };
-    if (safeEntry.store_id) safeEntry.store_id = safeEntry.store_id.toString();
-    if (safeEntry.employee_id) safeEntry.employee_id = safeEntry.employee_id.toString();
+    // Ensure IDs are strings
+    const safeEntry = this.normalizeTimeEntryForApi(entry);
     
     return this.http.post<TimeEntry>(this.timeEntriesUrl, safeEntry).pipe(
       tap((newEntry: TimeEntry) => console.log(`Created time entry id=${newEntry._id}`)),
-      catchError(this.handleError<TimeEntry>('createTimeEntry'))
+      catchError(ErrorHandlingService.handleError<TimeEntry>('createTimeEntry'))
     );
   }
   
@@ -101,18 +118,15 @@ export class HoursService {
    */
   updateTimeEntry(id: string, entry: Partial<TimeEntry>): Observable<TimeEntry> {
     // Ensure ID is string format
-    const safeId = id.toString();
+    const safeId = IdUtils.ensureString(id);
     const url = `${this.timeEntriesUrl}/${safeId}`;
     
-    // Make sure any IDs in the update are strings
-    const safeEntry = { ...entry };
-    if (safeEntry.store_id) safeEntry.store_id = safeEntry.store_id.toString();
-    if (safeEntry.employee_id) safeEntry.employee_id = safeEntry.employee_id.toString();
-    if (safeEntry.approved_by) safeEntry.approved_by = safeEntry.approved_by.toString();
+    // Normalize entry for API
+    const safeEntry = this.normalizeTimeEntryForApi(entry);
     
     return this.http.put<TimeEntry>(url, safeEntry).pipe(
       tap(_ => console.log(`Updated time entry id=${safeId}`)),
-      catchError(this.handleError<TimeEntry>(`updateTimeEntry id=${safeId}`))
+      catchError(ErrorHandlingService.handleError<TimeEntry>(`updateTimeEntry id=${safeId}`))
     );
   }
   
@@ -121,12 +135,12 @@ export class HoursService {
    */
   deleteTimeEntry(id: string): Observable<boolean> {
     // Ensure ID is string format
-    const safeId = id.toString();
+    const safeId = IdUtils.ensureString(id);
     const url = `${this.timeEntriesUrl}/${safeId}`;
     
     return this.http.delete<boolean>(url).pipe(
       tap(_ => console.log(`Deleted time entry id=${safeId}`)),
-      catchError(this.handleError<boolean>(`deleteTimeEntry id=${safeId}`))
+      catchError(ErrorHandlingService.handleError<boolean>(`deleteTimeEntry id=${safeId}`))
     );
   }
   
@@ -135,7 +149,7 @@ export class HoursService {
    */
   clockIn(storeId: string, notes?: string): Observable<TimeEntry> {
     // Ensure store ID is string format
-    const safeStoreId = storeId.toString();
+    const safeStoreId = IdUtils.ensureString(storeId);
     
     // Get the employee ID for the current user
     return this.getCurrentEmployeeId().pipe(
@@ -162,7 +176,7 @@ export class HoursService {
    */
   clockOut(entryId: string, notes?: string): Observable<TimeEntry> {
     // Ensure ID is string format
-    const safeId = entryId.toString();
+    const safeId = IdUtils.ensureString(entryId);
     
     const updatedData: Partial<TimeEntry> = {
       clock_out: new Date().toISOString(),
@@ -196,9 +210,12 @@ export class HoursService {
    * Helper method to fetch active time entry using the API
    */
   private fetchActiveTimeEntry(employeeId: string): Observable<TimeEntry | null> {
+    // Ensure employee ID is string
+    const safeEmployeeId = IdUtils.ensureString(employeeId);
+    
     // Get pending entries for this employee
     let params = new HttpParams()
-      .set('employee_id', employeeId)
+      .set('employee_id', safeEmployeeId)
       .set('status', 'pending');
     
     return this.http.get<TimeEntry[]>(this.timeEntriesUrl, { params }).pipe(
@@ -210,9 +227,9 @@ export class HoursService {
       }),
       tap(entry => {
         if (entry) {
-          console.log(`Found active time entry for employee id=${employeeId}`);
+          console.log(`Found active time entry for employee id=${safeEmployeeId}`);
         } else {
-          console.log(`No active time entry found for employee id=${employeeId}`);
+          console.log(`No active time entry found for employee id=${safeEmployeeId}`);
         }
       }),
       catchError(error => {
@@ -227,7 +244,7 @@ export class HoursService {
    */
   approveTimeEntry(id: string): Observable<TimeEntry> {
     // Ensure ID is string format
-    const safeId = id.toString();
+    const safeId = IdUtils.ensureString(id);
     const url = `${this.timeEntriesUrl}/${safeId}/approve`;
     
     // Match the backend HourApproval schema
@@ -238,7 +255,7 @@ export class HoursService {
     
     return this.http.put<TimeEntry>(url, approvalData).pipe(
       tap(_ => console.log(`Approved time entry id=${safeId}`)),
-      catchError(this.handleError<TimeEntry>(`approveTimeEntry id=${safeId}`))
+      catchError(ErrorHandlingService.handleError<TimeEntry>(`approveTimeEntry id=${safeId}`))
     );
   }
   
@@ -247,7 +264,7 @@ export class HoursService {
    */
   rejectTimeEntry(id: string, reason: string): Observable<TimeEntry> {
     // Ensure ID is string format
-    const safeId = id.toString();
+    const safeId = IdUtils.ensureString(id);
     const url = `${this.timeEntriesUrl}/${safeId}/approve`;
     
     // Match the backend HourApproval schema
@@ -258,7 +275,7 @@ export class HoursService {
     
     return this.http.put<TimeEntry>(url, rejectionData).pipe(
       tap(_ => console.log(`Rejected time entry id=${safeId}`)),
-      catchError(this.handleError<TimeEntry>(`rejectTimeEntry id=${safeId}`))
+      catchError(ErrorHandlingService.handleError<TimeEntry>(`rejectTimeEntry id=${safeId}`))
     );
   }
   
@@ -283,21 +300,18 @@ export class HoursService {
       return of([]); // Return empty array for admin users
     }
     
+    // Ensure all IDs are string format
+    const safeParams = IdUtils.createIdParams(options);
     let params = new HttpParams();
     
-    // Ensure all IDs are string format
-    if (options.employee_id) params = params.set('employee_id', options.employee_id.toString());
-    if (options.store_id) params = params.set('store_id', options.store_id.toString());
-    if (options.start_date) params = params.set('start_date', options.start_date);
-    if (options.end_date) params = params.set('end_date', options.end_date);
-    if (options.status) params = params.set('status', options.status);
-    if (options.skip !== undefined) params = params.set('skip', options.skip.toString());
-    if (options.limit !== undefined) params = params.set('limit', options.limit.toString());
+    Object.keys(safeParams).forEach(key => {
+      params = params.set(key, safeParams[key]);
+    });
     
     return this.http.get<WeeklyTimesheet[]>(this.timesheetsUrl, { params }).pipe(
       tap(timesheets => console.log(`Fetched ${timesheets.length} timesheets`)),
       switchMap(timesheets => this.enhanceTimesheets(timesheets)),
-      catchError(this.handleError<WeeklyTimesheet[]>('getTimesheets', []))
+      catchError(ErrorHandlingService.handleError<WeeklyTimesheet[]>('getTimesheets', []))
     );
   }
   
@@ -306,7 +320,7 @@ export class HoursService {
    */
   getTimesheet(id: string): Observable<WeeklyTimesheet> {
     // Ensure ID is string format
-    const safeId = id.toString();
+    const safeId = IdUtils.ensureString(id);
     const url = `${this.timesheetsUrl}/${safeId}`;
     
     return this.http.get<WeeklyTimesheet>(url).pipe(
@@ -314,7 +328,7 @@ export class HoursService {
       switchMap(timesheet => this.enhanceTimesheets([timesheet]).pipe(
         map(timesheets => timesheets[0])
       )),
-      catchError(this.handleError<WeeklyTimesheet>(`getTimesheet id=${safeId}`))
+      catchError(ErrorHandlingService.handleError<WeeklyTimesheet>(`getTimesheet id=${safeId}`))
     );
   }
   
@@ -322,19 +336,12 @@ export class HoursService {
    * Create a new timesheet
    */
   createTimesheet(timesheet: Partial<WeeklyTimesheet>): Observable<WeeklyTimesheet> {
-    // Make sure all IDs are strings
-    const safeTimesheet = { ...timesheet };
-    if (safeTimesheet.employee_id) safeTimesheet.employee_id = safeTimesheet.employee_id.toString();
-    if (safeTimesheet.store_id) safeTimesheet.store_id = safeTimesheet.store_id.toString();
-    
-    // Ensure time_entries array contains string IDs
-    if (safeTimesheet.time_entries) {
-      safeTimesheet.time_entries = safeTimesheet.time_entries.map(id => id.toString());
-    }
+    // Normalize timesheet for API
+    const safeTimesheet = this.normalizeTimesheetForApi(timesheet);
     
     return this.http.post<WeeklyTimesheet>(this.timesheetsUrl, safeTimesheet).pipe(
       tap((newTimesheet: WeeklyTimesheet) => console.log(`Created timesheet id=${newTimesheet._id}`)),
-      catchError(this.handleError<WeeklyTimesheet>('createTimesheet'))
+      catchError(ErrorHandlingService.handleError<WeeklyTimesheet>('createTimesheet'))
     );
   }
   
@@ -343,23 +350,15 @@ export class HoursService {
    */
   updateTimesheet(id: string, timesheet: Partial<WeeklyTimesheet>): Observable<WeeklyTimesheet> {
     // Ensure ID is string format
-    const safeId = id.toString();
+    const safeId = IdUtils.ensureString(id);
     const url = `${this.timesheetsUrl}/${safeId}`;
     
-    // Make sure all IDs are strings
-    const safeTimesheet = { ...timesheet };
-    if (safeTimesheet.employee_id) safeTimesheet.employee_id = safeTimesheet.employee_id.toString();
-    if (safeTimesheet.store_id) safeTimesheet.store_id = safeTimesheet.store_id.toString();
-    if (safeTimesheet.approved_by) safeTimesheet.approved_by = safeTimesheet.approved_by.toString();
-    
-    // Ensure time_entries array contains string IDs
-    if (safeTimesheet.time_entries) {
-      safeTimesheet.time_entries = safeTimesheet.time_entries.map(id => id.toString());
-    }
+    // Normalize timesheet for API
+    const safeTimesheet = this.normalizeTimesheetForApi(timesheet);
     
     return this.http.put<WeeklyTimesheet>(url, safeTimesheet).pipe(
       tap(_ => console.log(`Updated timesheet id=${safeId}`)),
-      catchError(this.handleError<WeeklyTimesheet>(`updateTimesheet id=${safeId}`))
+      catchError(ErrorHandlingService.handleError<WeeklyTimesheet>(`updateTimesheet id=${safeId}`))
     );
   }
   
@@ -368,12 +367,12 @@ export class HoursService {
    */
   deleteTimesheet(id: string): Observable<boolean> {
     // Ensure ID is string format
-    const safeId = id.toString();
+    const safeId = IdUtils.ensureString(id);
     const url = `${this.timesheetsUrl}/${safeId}`;
     
     return this.http.delete<boolean>(url).pipe(
       tap(_ => console.log(`Deleted timesheet id=${safeId}`)),
-      catchError(this.handleError<boolean>(`deleteTimesheet id=${safeId}`))
+      catchError(ErrorHandlingService.handleError<boolean>(`deleteTimesheet id=${safeId}`))
     );
   }
   
@@ -382,7 +381,7 @@ export class HoursService {
    */
   submitTimesheet(id: string, notes?: string): Observable<WeeklyTimesheet> {
     // Ensure ID is string format
-    const safeId = id.toString();
+    const safeId = IdUtils.ensureString(id);
     const url = `${this.timesheetsUrl}/${safeId}/submit`;
     
     // Match the backend TimesheetSubmit schema
@@ -390,7 +389,7 @@ export class HoursService {
     
     return this.http.post<WeeklyTimesheet>(url, submitData).pipe(
       tap(_ => console.log(`Submitted timesheet id=${safeId}`)),
-      catchError(this.handleError<WeeklyTimesheet>(`submitTimesheet id=${safeId}`))
+      catchError(ErrorHandlingService.handleError<WeeklyTimesheet>(`submitTimesheet id=${safeId}`))
     );
   }
   
@@ -399,7 +398,7 @@ export class HoursService {
    */
   approveTimesheet(id: string, notes?: string): Observable<WeeklyTimesheet> {
     // Ensure ID is string format
-    const safeId = id.toString();
+    const safeId = IdUtils.ensureString(id);
     const url = `${this.timesheetsUrl}/${safeId}/approve`;
     
     // Match the backend TimesheetApproval schema
@@ -410,7 +409,7 @@ export class HoursService {
     
     return this.http.post<WeeklyTimesheet>(url, approvalData).pipe(
       tap(_ => console.log(`Approved timesheet id=${safeId}`)),
-      catchError(this.handleError<WeeklyTimesheet>(`approveTimesheet id=${safeId}`))
+      catchError(ErrorHandlingService.handleError<WeeklyTimesheet>(`approveTimesheet id=${safeId}`))
     );
   }
   
@@ -419,7 +418,7 @@ export class HoursService {
    */
   rejectTimesheet(id: string, reason: string): Observable<WeeklyTimesheet> {
     // Ensure ID is string format
-    const safeId = id.toString();
+    const safeId = IdUtils.ensureString(id);
     const url = `${this.timesheetsUrl}/${safeId}/approve`;
     
     // Match the backend TimesheetApproval schema
@@ -430,7 +429,7 @@ export class HoursService {
     
     return this.http.post<WeeklyTimesheet>(url, rejectionData).pipe(
       tap(_ => console.log(`Rejected timesheet id=${safeId}`)),
-      catchError(this.handleError<WeeklyTimesheet>(`rejectTimesheet id=${safeId}`))
+      catchError(ErrorHandlingService.handleError<WeeklyTimesheet>(`rejectTimesheet id=${safeId}`))
     );
   }
   
@@ -445,7 +444,7 @@ export class HoursService {
     }
     
     // Ensure employee ID is string format
-    const safeEmployeeId = employeeId.toString();
+    const safeEmployeeId = IdUtils.ensureString(employeeId);
     
     // Use the me/current endpoint from the backend
     const url = `${this.timesheetsUrl}/me/current`;
@@ -457,7 +456,7 @@ export class HoursService {
         if (error.status === 404) {
           return of(null);
         }
-        return this.handleError<WeeklyTimesheet | null>('getCurrentTimesheet', null)(error);
+        return ErrorHandlingService.handleError<WeeklyTimesheet | null>('getCurrentTimesheet', null)(error);
       })
     );
   }
@@ -467,14 +466,14 @@ export class HoursService {
    */
   addTimeEntryToTimesheet(timesheetId: string, timeEntryId: string): Observable<WeeklyTimesheet> {
     // Ensure both IDs are string format
-    const safeTimesheetId = timesheetId.toString();
-    const safeTimeEntryId = timeEntryId.toString();
+    const safeTimesheetId = IdUtils.ensureString(timesheetId);
+    const safeTimeEntryId = IdUtils.ensureString(timeEntryId);
     
     const url = `${this.timesheetsUrl}/${safeTimesheetId}/time-entries/${safeTimeEntryId}`;
     
     return this.http.post<WeeklyTimesheet>(url, {}).pipe(
       tap(_ => console.log(`Added time entry ${safeTimeEntryId} to timesheet ${safeTimesheetId}`)),
-      catchError(this.handleError<WeeklyTimesheet>(`addTimeEntryToTimesheet`))
+      catchError(ErrorHandlingService.handleError<WeeklyTimesheet>(`addTimeEntryToTimesheet`))
     );
   }
   
@@ -483,14 +482,14 @@ export class HoursService {
    */
   removeTimeEntryFromTimesheet(timesheetId: string, timeEntryId: string): Observable<WeeklyTimesheet> {
     // Ensure both IDs are string format
-    const safeTimesheetId = timesheetId.toString();
-    const safeTimeEntryId = timeEntryId.toString();
+    const safeTimesheetId = IdUtils.ensureString(timesheetId);
+    const safeTimeEntryId = IdUtils.ensureString(timeEntryId);
     
     const url = `${this.timesheetsUrl}/${safeTimesheetId}/time-entries/${safeTimeEntryId}`;
     
     return this.http.delete<WeeklyTimesheet>(url).pipe(
       tap(_ => console.log(`Removed time entry ${safeTimeEntryId} from timesheet ${safeTimesheetId}`)),
-      catchError(this.handleError<WeeklyTimesheet>(`removeTimeEntryFromTimesheet`))
+      catchError(ErrorHandlingService.handleError<WeeklyTimesheet>(`removeTimeEntryFromTimesheet`))
     );
   }
   
@@ -505,8 +504,8 @@ export class HoursService {
     }
     
     // Ensure IDs are string format
-    const safeEmployeeId = employeeId.toString();
-    const safeStoreId = storeId.toString();
+    const safeEmployeeId = IdUtils.ensureString(employeeId);
+    const safeStoreId = IdUtils.ensureString(storeId);
     
     const url = `${this.timesheetsUrl}/generate`;
     const params = new HttpParams()
@@ -517,7 +516,7 @@ export class HoursService {
     
     return this.http.post<WeeklyTimesheet>(url, null, { params }).pipe(
       tap(_ => console.log(`Generated timesheet for employee ${safeEmployeeId}`)),
-      catchError(this.handleError<WeeklyTimesheet>(`generateTimesheet`))
+      catchError(ErrorHandlingService.handleError<WeeklyTimesheet>(`generateTimesheet`))
     );
   }
   
@@ -533,19 +532,20 @@ export class HoursService {
     skip?: number,
     limit?: number
   } = {}): Observable<Schedule[]> {
+    // Ensure all IDs are string format
+    const safeParams = IdUtils.createIdParams(options);
     let params = new HttpParams();
     
-    // Ensure store ID is string format
-    if (options.store_id) params = params.set('store_id', options.store_id.toString());
-    if (options.start_date) params = params.set('start_date', options.start_date);
-    if (options.end_date) params = params.set('end_date', options.end_date);
-    if (options.skip !== undefined) params = params.set('skip', options.skip.toString());
-    if (options.limit !== undefined) params = params.set('limit', options.limit.toString());
+    Object.keys(safeParams).forEach(key => {
+      params = params.set(key, safeParams[key]);
+    });
     
     return this.http.get<Schedule[]>(this.schedulesUrl, { params }).pipe(
       tap(schedules => console.log(`Fetched ${schedules.length} schedules`)),
+      // Continued from previous part...
+
       switchMap(schedules => this.enhanceSchedules(schedules)),
-      catchError(this.handleError<Schedule[]>('getSchedules', []))
+      catchError(ErrorHandlingService.handleError<Schedule[]>('getSchedules', []))
     );
   }
   
@@ -554,7 +554,7 @@ export class HoursService {
    */
   getSchedule(id: string): Observable<Schedule> {
     // Ensure ID is string format
-    const safeId = id.toString();
+    const safeId = IdUtils.ensureString(id);
     const url = `${this.schedulesUrl}/${safeId}`;
     
     return this.http.get<Schedule>(url).pipe(
@@ -562,7 +562,7 @@ export class HoursService {
       switchMap(schedule => this.enhanceSchedules([schedule]).pipe(
         map(schedules => schedules[0])
       )),
-      catchError(this.handleError<Schedule>(`getSchedule id=${safeId}`))
+      catchError(ErrorHandlingService.handleError<Schedule>(`getSchedule id=${safeId}`))
     );
   }
   
@@ -570,22 +570,12 @@ export class HoursService {
    * Create a new schedule
    */
   createSchedule(schedule: Partial<Schedule>): Observable<Schedule> {
-    // Make sure store_id and created_by are strings
-    const safeSchedule = { ...schedule };
-    if (safeSchedule.store_id) safeSchedule.store_id = safeSchedule.store_id.toString();
-    if (safeSchedule.created_by) safeSchedule.created_by = safeSchedule.created_by.toString();
-    
-    // Make sure shifts have string employee_ids
-    if (safeSchedule.shifts) {
-      safeSchedule.shifts = safeSchedule.shifts.map(shift => ({
-        ...shift,
-        employee_id: shift.employee_id.toString()
-      }));
-    }
+    // Normalize schedule for API
+    const safeSchedule = this.normalizeScheduleForApi(schedule);
     
     return this.http.post<Schedule>(this.schedulesUrl, safeSchedule).pipe(
       tap((newSchedule: Schedule) => console.log(`Created schedule id=${newSchedule._id}`)),
-      catchError(this.handleError<Schedule>('createSchedule'))
+      catchError(ErrorHandlingService.handleError<Schedule>('createSchedule'))
     );
   }
   
@@ -593,93 +583,38 @@ export class HoursService {
    * Update an existing schedule
    */
   updateSchedule(id: string, schedule: Partial<Schedule>): Observable<Schedule> {
-    const safeId = id.toString();
+    const safeId = IdUtils.ensureString(id);
     const url = `${this.schedulesUrl}/${safeId}`;
     
-    // Create a deep copy with careful shift processing
-    const safeSchedule = { ...schedule };
+    // Normalize schedule for API
+    const safeSchedule = this.normalizeScheduleForApi(schedule);
     
-    // Ensure shifts are properly processed
-    if (safeSchedule.shifts) {
-      safeSchedule.shifts = safeSchedule.shifts.map(shift => {
-        // Ensure consistent shift object
-        const processedShift: ScheduleShift = {
-          employee_id: shift.employee_id.toString(),
-          date: shift.date,
-          start_time: shift.start_time,
-          end_time: shift.end_time,
-          _id: this.normalizeShiftId(shift._id),
-          notes: shift.notes
-        };
-        
-        // Conditionally add extra metadata
-        if (shift.employee_name) {
-          processedShift.employee_name = shift.employee_name;
-        }
-        
-        return processedShift;
-      });
-    }
-    
-    // Remove non-standard properties
-    const finalSchedule = this.sanitizeScheduleObject(safeSchedule);
-    
-    return this.http.put<Schedule>(url, finalSchedule).pipe(
+    return this.http.put<Schedule>(url, safeSchedule).pipe(
       tap(response => {
         console.log(`Updated schedule id=${safeId}`);
-        console.log('Server response:', JSON.stringify(response));
         
-        // Warn about shift count discrepancy
-        if (response.shifts?.length !== safeSchedule.shifts?.length) {
+        // Verify shift count
+        if (response.shifts?.length !== schedule.shifts?.length) {
           console.warn(
-            `Shift count mismatch. Sent: ${safeSchedule.shifts?.length}, Received: ${response.shifts?.length}`
+            `Shift count mismatch. Sent: ${schedule.shifts?.length}, Received: ${response.shifts?.length}`
           );
         }
       }),
-      catchError(this.handleError<Schedule>(`updateSchedule id=${safeId}`))
+      catchError(ErrorHandlingService.handleError<Schedule>(`updateSchedule id=${safeId}`))
     );
   }
   
-  // Helper method to normalize shift IDs
-  private normalizeShiftId(id?: string): string {
-    // Remove temporary prefixes, generate new ID if needed
-    if (!id || id.startsWith('temp_')) {
-      return `shift_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    }
-    return id;
-  }
-  
-  // Sanitize schedule object
-  private sanitizeScheduleObject(schedule: Partial<Schedule>): Partial<Schedule> {
-    const sanitized = { ...schedule };
-    const anySchedule = sanitized as any;
-    
-    // Remove known non-standard properties
-    const propsToRemove = [
-      'store_name', 
-      'employee_names', 
-      'created_at',
-      'updated_at'
-    ];
-    
-    propsToRemove.forEach(prop => {
-      if (anySchedule[prop]) delete anySchedule[prop];
-    });
-    
-    return sanitized;
-  }
-
   /**
    * Delete a schedule
    */
   deleteSchedule(id: string): Observable<boolean> {
     // Ensure ID is string format
-    const safeId = id.toString();
+    const safeId = IdUtils.ensureString(id);
     const url = `${this.schedulesUrl}/${safeId}`;
     
     return this.http.delete<boolean>(url).pipe(
       tap(_ => console.log(`Deleted schedule id=${safeId}`)),
-      catchError(this.handleError<boolean>(`deleteSchedule id=${safeId}`))
+      catchError(ErrorHandlingService.handleError<boolean>(`deleteSchedule id=${safeId}`))
     );
   }
   
@@ -688,15 +623,15 @@ export class HoursService {
    */
   addShift(scheduleId: string, shift: ScheduleShift): Observable<Schedule> {
     // Ensure schedule ID is string format
-    const safeScheduleId = scheduleId.toString();
+    const safeScheduleId = IdUtils.ensureString(scheduleId);
     const url = `${this.schedulesUrl}/${safeScheduleId}/shifts`;
     
-    // Ensure employee_id is string
-    const safeShift = { ...shift, employee_id: shift.employee_id.toString() };
+    // Normalize shift for API
+    const safeShift = this.normalizeShiftForApi(shift);
     
     return this.http.post<Schedule>(url, safeShift).pipe(
       tap(_ => console.log(`Added shift to schedule id=${safeScheduleId}`)),
-      catchError(this.handleError<Schedule>(`addShift scheduleId=${safeScheduleId}`))
+      catchError(ErrorHandlingService.handleError<Schedule>(`addShift scheduleId=${safeScheduleId}`))
     );
   }
   
@@ -705,244 +640,359 @@ export class HoursService {
    */
   removeShift(scheduleId: string, shiftId: string): Observable<Schedule> {
     // Ensure both IDs are string format
-    const safeScheduleId = scheduleId.toString();
-    const safeShiftId = shiftId.toString();
+    const safeScheduleId = IdUtils.ensureString(scheduleId);
+    const safeShiftId = IdUtils.ensureString(shiftId);
     
     const url = `${this.schedulesUrl}/${safeScheduleId}/shifts/${safeShiftId}`;
     
     return this.http.delete<Schedule>(url).pipe(
       tap(_ => console.log(`Removed shift id=${safeShiftId} from schedule id=${safeScheduleId}`)),
-      catchError(this.handleError<Schedule>(`removeShift scheduleId=${safeScheduleId}, shiftId=${safeShiftId}`))
+      catchError(ErrorHandlingService.handleError<Schedule>(`removeShift scheduleId=${safeScheduleId}, shiftId=${safeShiftId}`))
     );
   }
 
   /**
- * Get schedule for specific employee
- */
-getEmployeeSchedule(employeeId: string, startDate: string, endDate: string): Observable<ScheduleShift[]> {
-  // Special handling for admin users
-  if (this.isAdminUser() && employeeId === this.authService.currentUser?._id) {
-    console.log('Admin user trying to get personal schedule. Returning empty array.');
-    return of([]);
+   * Get schedule for specific employee
+   */
+  getEmployeeSchedule(employeeId: string, startDate: string, endDate: string): Observable<ScheduleShift[]> {
+    // Ensure employee ID is string format
+    const safeEmployeeId = IdUtils.ensureString(employeeId);
+    console.log(`getEmployeeSchedule: Requesting shifts for employee ID: ${safeEmployeeId}`);
+    
+    const params = new HttpParams()
+      .set('start_date', startDate)
+      .set('end_date', endDate);
+    
+    const url = `${this.schedulesUrl}/employee/${safeEmployeeId}/shifts`;
+    
+    return this.http.get<ScheduleShift[]>(url, { params }).pipe(
+      tap(shifts => {
+        console.log(`Received ${shifts.length} shifts from API for employee: ${safeEmployeeId}`);
+        // Verify API is returning correct data
+        shifts.forEach(shift => {
+          if (IdUtils.ensureString(shift.employee_id) !== safeEmployeeId) {
+            console.error('API returned shift for wrong employee:', shift);
+          }
+        });
+      }),
+      // Add an extra filter on the frontend just to be safe
+      map(shifts => shifts.filter(shift => 
+        IdUtils.ensureString(shift.employee_id) === safeEmployeeId
+      )),
+      //catchError(this.handleError<ScheduleShift[]>(`getEmployeeSchedule employeeId=${safeEmployeeId}`, []))
+    );
   }
-  
-  // Ensure employee ID is string format
-  const safeEmployeeId = employeeId.toString();
-  
-  const params = new HttpParams()
-    .set('start_date', startDate)
-    .set('end_date', endDate);
-  
-  const url = `${this.schedulesUrl}/employee/${safeEmployeeId}/shifts`;
-  
-  return this.http.get<ScheduleShift[]>(url, { params }).pipe(
-    tap(shifts => console.log(`Fetched ${shifts.length} shifts for employee id=${safeEmployeeId}`)),
-    catchError(this.handleError<ScheduleShift[]>(`getEmployeeSchedule employeeId=${safeEmployeeId}`, []))
-  );
-}
 
-// ======== Helper Methods ========
+  // ======== Helper Methods ========
 
-/**
- * Check if the current user is an admin
- */
-private isAdminUser(): boolean {
-  const currentUser = this.authService.currentUser;
-  // Admin role ID
-  return currentUser?.role_id === '67c9fb4d9db05f47c32b6b22';
-}
-
-/**
- * Get current employee ID from the authenticated user
- * Returns an Observable that emits the employee ID or null if no employee record exists
- */
-public getCurrentEmployeeId(): Observable<string | null> {
-  // Get the current user
-  const currentUser = this.authService.currentUser;
-  if (!currentUser) {
-    console.log('No authenticated user found');
-    return of(null);
+  /**
+   * Check if the current user is an admin
+   */
+  private isAdminUser(): boolean {
+    const currentUser = this.authService.currentUser;
+    // Admin role ID
+    return currentUser?.role_id === '67c9fb4d9db05f47c32b6b22';
   }
-  
-  // If user is admin, they don't have an employee record
-  if (this.isAdminUser()) {
-    console.log('User is an admin without employee record');
-    return of(null);
-  }
-  
-  // For regular employees, check if they have an employee record
-  return this.employeeService.getEmployeeByUserId(currentUser._id).pipe(
-    map(employee => {
-      if (employee) {
-        return employee._id.toString();
-      } else {
-        console.log('No employee record found for user ID: ' + currentUser._id);
-        return null;
-      }
-    }),
-    catchError(error => {
-      console.error('Error fetching employee record:', error);
+
+  /**
+   * Get current employee ID from the authenticated user
+   * Returns an Observable that emits the employee ID or null if no employee record exists
+   */
+  public getCurrentEmployeeId(): Observable<string | null> {
+    // Get the current user
+    const currentUser = this.authService.currentUser;
+    if (!currentUser) {
+      console.log('No authenticated user found');
       return of(null);
-    })
-  );
-}
-
-/**
- * Get start of the week (Sunday) for a given date
- */
-getStartOfWeek(date: Date): Date {
-  const result = new Date(date);
-  const day = result.getDay();
-  const diff = result.getDate() - day;
-  result.setDate(diff);
-  result.setHours(0, 0, 0, 0);
-  return result;
-}
-
-/**
- * Get end of the week (Saturday) for a given date
- */
-getEndOfWeek(date: Date): Date {
-  const result = new Date(date);
-  const day = result.getDay();
-  const diff = result.getDate() - day + 6;
-  result.setDate(diff);
-  result.setHours(23, 59, 59, 999);
-  return result;
-}
-
-/**
- * Format total minutes as HH:MM string
- */
-formatTimeFromMinutes(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-}
-
-/**
- * Calculate time difference in minutes between two ISO datetime strings
- */
-calculateTimeDifference(startTime: string, endTime: string): number {
-  const start = new Date(startTime);
-  const end = new Date(endTime);
-  return Math.round((end.getTime() - start.getTime()) / (1000 * 60));
-}
-
-/**
- * Enhance time entries with employee and store names
- */
-private enhanceTimeEntries(entries: TimeEntry[]): Observable<TimeEntry[]> {
-  if (entries.length === 0) {
-    return of([]);
+    }
+    
+    // If user is admin, they don't have an employee record
+    if (this.isAdminUser()) {
+      console.log('User is an admin without employee record');
+      return of(null);
+    }
+    
+    // For regular employees, check if they have an employee record
+    return this.employeeService.getEmployeeByUserId(currentUser._id).pipe(
+      map(employee => {
+        if (employee) {
+          return IdUtils.ensureString(employee._id);
+        } else {
+          console.log('No employee record found for user ID: ' + currentUser._id);
+          return null;
+        }
+      }),
+      catchError(error => {
+        console.error('Error fetching employee record:', error);
+        return of(null);
+      })
+    );
   }
-  
-  const employeeIds = [...new Set(entries.map(entry => entry.employee_id))];
-  const storeIds = [...new Set(entries.map(entry => entry.store_id))];
-  
-  return forkJoin({
-    employees: this.employeeService.getEmployees(),
-    stores: this.storeService.getStores()
-  }).pipe(
-    map(({ employees, stores }) => {
-      return entries.map(entry => {
-        const employee = employees.find(e => e._id === entry.employee_id);
-        const store = stores.find(s => s._id === entry.store_id);
-        
-        return {
-          ...entry,
-          employee_name: employee?.full_name || 'Unknown',
-          store_name: store?.name || 'Unknown'
-        };
-      });
-    })
-  );
-}
 
-/**
- * Enhance timesheets with employee and store names
- */
-private enhanceTimesheets(timesheets: WeeklyTimesheet[]): Observable<WeeklyTimesheet[]> {
-  if (timesheets.length === 0) {
-    return of([]);
+  /**
+   * Get start of the week (Sunday) for a given date
+   */
+  getStartOfWeek(date: Date): Date {
+    const result = new Date(date);
+    const day = result.getDay();
+    const diff = result.getDate() - day;
+    result.setDate(diff);
+    result.setHours(0, 0, 0, 0);
+    return result;
   }
-  
-  const employeeIds = [...new Set(timesheets.map(sheet => sheet.employee_id))];
-  const storeIds = [...new Set(timesheets.map(sheet => sheet.store_id))];
-  
-  return forkJoin({
-    employees: this.employeeService.getEmployees(),
-    stores: this.storeService.getStores()
-  }).pipe(
-    map(({ employees, stores }) => {
-      return timesheets.map(timesheet => {
-        const employee = employees.find(e => e._id === timesheet.employee_id);
-        const store = stores.find(s => s._id === timesheet.store_id);
-        
-        return {
-          ...timesheet,
-          employee_name: employee?.full_name || 'Unknown',
-          store_name: store?.name || 'Unknown'
-        };
-      });
-    })
-  );
-}
 
-/**
- * Enhance schedules with store names
- */
-private enhanceSchedules(schedules: Schedule[]): Observable<Schedule[]> {
-  if (schedules.length === 0) {
-    return of([]);
+  /**
+   * Get end of the week (Saturday) for a given date
+   */
+  getEndOfWeek(date: Date): Date {
+    const result = new Date(date);
+    const day = result.getDay();
+    const diff = result.getDate() - day + 6;
+    result.setDate(diff);
+    result.setHours(23, 59, 59, 999);
+    return result;
   }
-  
-  const storeIds = [...new Set(schedules.map(schedule => schedule.store_id))];
-  const employeeIds = [...new Set(
-    schedules.flatMap(schedule => 
-      schedule.shifts.map(shift => shift.employee_id)
-    )
-  )];
-  
-  return forkJoin({
-    employees: this.employeeService.getEmployees(),
-    stores: this.storeService.getStores()
-  }).pipe(
-    map(({ employees, stores }) => {
-      return schedules.map(schedule => {
-        const store = stores.find(s => s._id === schedule.store_id);
-        
-        // Enhance each shift with employee name
-        const enhancedShifts = schedule.shifts.map(shift => {
-          const employee = employees.find(e => e._id === shift.employee_id);
+
+  /**
+   * Format total minutes as HH:MM string
+   */
+  formatTimeFromMinutes(minutes: number): string {
+    if (!minutes && minutes !== 0) return '00:00';
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+  }
+
+  /**
+   * Calculate time difference in minutes between two ISO datetime strings
+   */
+  calculateTimeDifference(startTime: string, endTime: string): number {
+    if (!startTime || !endTime) return 0;
+    
+    try {
+      return DateTimeUtils.calculateDurationMinutes(startTime, endTime);
+    } catch (error) {
+      console.error('Error calculating time difference:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Normalize a time entry object for API requests
+   */
+  private normalizeTimeEntryForApi(entry: Partial<TimeEntry>): Partial<TimeEntry> {
+    if (!entry) return {};
+    
+    const normalized: Partial<TimeEntry> = { ...entry };
+    
+    // Ensure IDs are strings
+    if (normalized.employee_id) {
+      normalized.employee_id = IdUtils.ensureString(normalized.employee_id);
+    }
+    
+    if (normalized.store_id) {
+      normalized.store_id = IdUtils.ensureString(normalized.store_id);
+    }
+    
+    if (normalized.approved_by) {
+      normalized.approved_by = IdUtils.ensureString(normalized.approved_by);
+    }
+    
+    // Remove frontend-specific properties
+    delete normalized.employee_name;
+    delete normalized.store_name;
+    
+    return normalized;
+  }
+
+  /**
+   * Normalize a timesheet object for API requests
+   */
+  private normalizeTimesheetForApi(timesheet: Partial<WeeklyTimesheet>): Partial<WeeklyTimesheet> {
+    if (!timesheet) return {};
+    
+    const normalized: Partial<WeeklyTimesheet> = { ...timesheet };
+    
+    // Ensure IDs are strings
+    if (normalized.employee_id) {
+      normalized.employee_id = IdUtils.ensureString(normalized.employee_id);
+    }
+    
+    if (normalized.store_id) {
+      normalized.store_id = IdUtils.ensureString(normalized.store_id);
+    }
+    
+    if (normalized.approved_by) {
+      normalized.approved_by = IdUtils.ensureString(normalized.approved_by);
+    }
+    
+    // Ensure time_entries array contains string IDs
+    if (normalized.time_entries) {
+      normalized.time_entries = normalized.time_entries.map(id => IdUtils.ensureString(id));
+    }
+    
+    // Remove frontend-specific properties
+    delete normalized.employee_name;
+    delete normalized.store_name;
+    
+    return normalized;
+  }
+
+  /**
+   * Normalize a schedule object for API requests
+   */
+  private normalizeScheduleForApi(schedule: Partial<Schedule>): Partial<Schedule> {
+    if (!schedule) return {};
+    
+    const normalized: Partial<Schedule> = { ...schedule };
+    
+    // Ensure IDs are strings
+    if (normalized.store_id) {
+      normalized.store_id = IdUtils.ensureString(normalized.store_id);
+    }
+    
+    if (normalized.created_by) {
+      normalized.created_by = IdUtils.ensureString(normalized.created_by);
+    }
+    
+    // Normalize shifts
+    if (normalized.shifts) {
+      normalized.shifts = normalized.shifts.map(shift => this.normalizeShiftForApi(shift));
+    }
+    
+    // Remove frontend-specific properties
+    delete normalized.store_name;
+    
+    return normalized;
+  }
+
+  /**
+   * Normalize a shift object for API requests
+   */
+  private normalizeShiftForApi(shift: ScheduleShift): ScheduleShift {
+    if (!shift) return {} as ScheduleShift;
+    
+    const normalized: ScheduleShift = {
+      ...shift,
+      employee_id: IdUtils.ensureString(shift.employee_id),
+      date: shift.date,
+      start_time: shift.start_time,
+      end_time: shift.end_time
+    };
+    
+    // Generate a shift ID if missing
+    if (!normalized._id) {
+      normalized._id = `shift_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    } else if (normalized._id.startsWith('temp_')) {
+      // Replace temporary IDs with proper format
+      normalized._id = `shift_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    }
+    
+    // Remove frontend-specific properties
+    delete normalized.employee_name;
+    
+    return normalized;
+  }
+
+  /**
+   * Enhance time entries with employee and store names
+   */
+  private enhanceTimeEntries(entries: TimeEntry[]): Observable<TimeEntry[]> {
+    if (entries.length === 0) {
+      return of([]);
+    }
+    
+    const employeeIds = [...new Set(entries.map(entry => entry.employee_id))];
+    const storeIds = [...new Set(entries.map(entry => entry.store_id))];
+    
+    return forkJoin({
+      employees: this.employeeService.getEmployees(),
+      stores: this.storeService.getStores()
+    }).pipe(
+      map(({ employees, stores }) => {
+        return entries.map(entry => {
+          const employee = employees.find(e => IdUtils.areEqual(e._id, entry.employee_id));
+          const store = stores.find(s => IdUtils.areEqual(s._id, entry.store_id));
+          
           return {
-            ...shift,
-            employee_name: employee?.full_name || 'Unknown'
+            ...entry,
+            employee_name: employee?.full_name || 'Unknown',
+            store_name: store?.name || 'Unknown'
           };
         });
-        
-        return {
-          ...schedule,
-          store_name: store?.name || 'Unknown',
-          shifts: enhancedShifts
-        };
-      });
-    })
-  );
-}
+      })
+    );
+  }
 
-/**
- * Handle Http operation that failed.
- * Let the app continue.
- * @param operation - name of the operation that failed
- * @param result - optional value to return as the observable result
- */
-private handleError<T>(operation = 'operation', result?: T) {
-  return (error: any): Observable<T> => {
-    console.error(`${operation} failed: ${error.message}`);
+  /**
+   * Enhance timesheets with employee and store names
+   */
+  private enhanceTimesheets(timesheets: WeeklyTimesheet[]): Observable<WeeklyTimesheet[]> {
+    if (timesheets.length === 0) {
+      return of([]);
+    }
     
-    // Let the app keep running by returning an empty result.
-    return of(result as T);
-  };
-}
+    const employeeIds = [...new Set(timesheets.map(sheet => sheet.employee_id))];
+    const storeIds = [...new Set(timesheets.map(sheet => sheet.store_id))];
+    
+    return forkJoin({
+      employees: this.employeeService.getEmployees(),
+      stores: this.storeService.getStores()
+    }).pipe(
+      map(({ employees, stores }) => {
+        return timesheets.map(timesheet => {
+          const employee = employees.find(e => IdUtils.areEqual(e._id, timesheet.employee_id));
+          const store = stores.find(s => IdUtils.areEqual(s._id, timesheet.store_id));
+          
+          return {
+            ...timesheet,
+            employee_name: employee?.full_name || 'Unknown',
+            store_name: store?.name || 'Unknown'
+          };
+        });
+      })
+    );
+  }
+
+  /**
+   * Enhance schedules with store names and employee names in shifts
+   */
+  private enhanceSchedules(schedules: Schedule[]): Observable<Schedule[]> {
+    if (schedules.length === 0) {
+      return of([]);
+    }
+    
+    const storeIds = [...new Set(schedules.map(schedule => schedule.store_id))];
+    const employeeIds = [...new Set(
+      schedules.flatMap(schedule => 
+        schedule.shifts.map(shift => shift.employee_id)
+      )
+    )];
+    
+    return forkJoin({
+      employees: this.employeeService.getEmployees(),
+      stores: this.storeService.getStores()
+    }).pipe(
+      map(({ employees, stores }) => {
+        return schedules.map(schedule => {
+          const store = stores.find(s => IdUtils.areEqual(s._id, schedule.store_id));
+          
+          // Enhance each shift with employee name
+          const enhancedShifts = schedule.shifts.map(shift => {
+            const employee = employees.find(e => IdUtils.areEqual(e._id, shift.employee_id));
+            return {
+              ...shift,
+              employee_name: employee?.full_name || 'Unknown'
+            };
+          });
+          
+          return {
+            ...schedule,
+            store_name: store?.name || 'Unknown',
+            shifts: enhancedShifts
+          };
+        });
+      })
+    );
+  }
 }
