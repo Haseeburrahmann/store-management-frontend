@@ -8,6 +8,9 @@ import { AuthService } from '../../../../core/auth/auth.service';
 import { PermissionService } from '../../../../core/auth/permission.service';
 import { TimeEntry, WeeklyTimesheet } from '../../../../shared/models/hours.model';
 import { HasPermissionDirective } from '../../../../shared/directives/has-permission.directive';
+import { DateTimeUtils } from '../../../../core/utils/date-time-utils.service';
+import { ErrorHandlingService } from '../../../../core/utils/error-handling.service';
+import { IdUtils } from '../../../../core/utils/id-utils.service';
 
 @Component({
   selector: 'app-timesheet-detail',
@@ -286,7 +289,7 @@ export class TimesheetDetailComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error loading timesheet:', err);
-        this.error = 'Failed to load timesheet. Please try again later.';
+        this.error = ErrorHandlingService.getErrorMessage(err);
         this.loading = false;
       }
     });
@@ -310,7 +313,7 @@ export class TimesheetDetailComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error loading time entries:', err);
-        this.error = 'Failed to load time entries. Please try again later.';
+        this.error = ErrorHandlingService.getErrorMessage(err);
         this.loading = false;
       }
     });
@@ -323,7 +326,7 @@ export class TimesheetDetailComponent implements OnInit {
     if (!currentUser) return false;
     
     // Users can manage their own timesheets
-    const isOwnTimesheet = this.timesheet.employee_id === currentUser._id;
+    const isOwnTimesheet = IdUtils.areEqual(this.timesheet.employee_id, currentUser._id);
     
     // Users with approval permissions can manage any timesheet
     const hasApprovalPermission = this.permissionService.hasPermission('hours:approve');
@@ -367,7 +370,7 @@ export class TimesheetDetailComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error submitting timesheet:', err);
-        this.error = 'Failed to submit timesheet. Please try again later.';
+        this.error = ErrorHandlingService.getErrorMessage(err);
       }
     });
   }
@@ -384,7 +387,7 @@ export class TimesheetDetailComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error approving timesheet:', err);
-        this.error = 'Failed to approve timesheet. Please try again later.';
+        this.error = ErrorHandlingService.getErrorMessage(err);
       }
     });
   }
@@ -404,7 +407,7 @@ export class TimesheetDetailComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error rejecting timesheet:', err);
-        this.error = 'Failed to reject timesheet. Please try again later.';
+        this.error = ErrorHandlingService.getErrorMessage(err);
       }
     });
   }
@@ -447,7 +450,10 @@ export class TimesheetDetailComponent implements OnInit {
       updatedEntry.clock_out = clockOutDate.toISOString();
       
       // Calculate total minutes
-      const durationMinutes = Math.round((clockOutDate.getTime() - clockInDate.getTime()) / (1000 * 60));
+      const durationMinutes = DateTimeUtils.calculateDurationMinutes(
+        updatedEntry.clock_in || this.editingEntry.clock_in, 
+        updatedEntry.clock_out || ''
+      );
       updatedEntry.total_minutes = durationMinutes;
     }
     
@@ -455,7 +461,7 @@ export class TimesheetDetailComponent implements OnInit {
     this.hoursService.updateTimeEntry(this.editingEntry._id || '', updatedEntry).subscribe({
       next: (entry) => {
         // Update the entry in the local array
-        const index = this.timeEntries.findIndex(e => e._id === entry._id);
+        const index = this.timeEntries.findIndex(e => IdUtils.areEqual(e._id, entry._id));
         if (index !== -1) {
           this.timeEntries[index] = entry;
         }
@@ -464,7 +470,7 @@ export class TimesheetDetailComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error updating time entry:', err);
-        this.error = 'Failed to update time entry. Please try again later.';
+        this.error = ErrorHandlingService.getErrorMessage(err);
       }
     });
   }
@@ -476,18 +482,21 @@ export class TimesheetDetailComponent implements OnInit {
   // Helper methods
   formatDateTime(dateStr?: string): string {
     if (!dateStr) return '';
-    const date = new Date(dateStr);
-    return date.toLocaleString();
+    return DateTimeUtils.formatDateForDisplay(dateStr, { 
+      year: 'numeric', 
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   }
   
   formatDate(dateStr: string): string {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString();
+    return DateTimeUtils.formatDateForDisplay(dateStr);
   }
   
   formatTime(dateStr: string): string {
-    const date = new Date(dateStr);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return DateTimeUtils.formatTimeForDisplay(dateStr);
   }
   
   formatTimeForInput(date: Date): string {
@@ -506,23 +515,12 @@ export class TimesheetDetailComponent implements OnInit {
       return 'None';
     }
     
-    const breakStart = new Date(entry.break_start);
-    const breakEnd = new Date(entry.break_end);
-    const breakMinutes = Math.floor((breakEnd.getTime() - breakStart.getTime()) / (1000 * 60));
-    
-    if (breakMinutes < 60) {
-      return `${breakMinutes}m`;
-    } else {
-      const hours = Math.floor(breakMinutes / 60);
-      const minutes = breakMinutes % 60;
-      return `${hours}h ${minutes > 0 ? minutes + 'm' : ''}`;
-    }
+    const breakMinutes = DateTimeUtils.calculateDurationMinutes(entry.break_start, entry.break_end);
+    return DateTimeUtils.formatDuration(breakMinutes);
   }
   
   formatHours(minutes?: number): string {
     if (!minutes) return '0h';
-    
-    const hours = minutes / 60;
-    return `${hours.toFixed(1)}h`;
+    return DateTimeUtils.formatDuration(minutes);
   }
 }

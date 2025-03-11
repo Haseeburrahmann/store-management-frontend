@@ -4,6 +4,8 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { HoursService } from '../../../../core/services/hours.service';
 import { PermissionService } from '../../../../core/auth/permission.service';
+import { AuthService } from '../../../../core/auth/auth.service';
+import { IdUtils } from '../../../../core/utils/id-utils.service';
 
 @Component({
   selector: 'app-pending-approvals-widget',
@@ -66,7 +68,8 @@ export class PendingApprovalsWidgetComponent implements OnInit {
   
   constructor(
     private hoursService: HoursService,
-    private permissionService: PermissionService
+    private permissionService: PermissionService,
+    private authService: AuthService
   ) {}
   
   ngOnInit(): void {
@@ -79,12 +82,17 @@ export class PendingApprovalsWidgetComponent implements OnInit {
   }
   
   loadPendingApprovals(): void {
-    // If user can approve timesheets, load pending timesheets
+    // If user can approve timesheets, load pending timesheets for all employees
     if (this.hasApprovalPermission) {
+      console.log('Loading pending timesheets for manager/admin approval');
+      
+      // Try both status values to catch all pending timesheets
       this.hoursService.getTimesheets({
-        status: 'submitted'
+        status: 'submitted',
+        limit: 10
       }).subscribe({
         next: (timesheets) => {
+          console.log(`Fetched ${timesheets.length} pending timesheets`);
           this.pendingCount = timesheets.length;
           
           // If there are more than 5 pending approvals, mark it as urgent
@@ -99,15 +107,33 @@ export class PendingApprovalsWidgetComponent implements OnInit {
       });
     } else {
       // For regular employees, check their own pending timesheet
-      this.hoursService.getTimesheets({
-        status: 'submitted'
-      }).subscribe({
-        next: (timesheets) => {
-          this.pendingCount = timesheets.length;
-          this.loading = false;
+      this.hoursService.getCurrentEmployeeId().subscribe({
+        next: (employeeId) => {
+          if (employeeId) {
+            const safeEmployeeId = IdUtils.ensureString(employeeId);
+            console.log('Loading pending timesheets for employee:', safeEmployeeId);
+            
+            this.hoursService.getTimesheets({
+              employee_id: safeEmployeeId,
+              status: 'submitted'
+            }).subscribe({
+              next: (timesheets) => {
+                console.log(`Fetched ${timesheets.length} pending timesheets for employee ${safeEmployeeId}`);
+                this.pendingCount = timesheets.length;
+                this.loading = false;
+              },
+              error: (err) => {
+                console.error('Error loading employee timesheets:', err);
+                this.loading = false;
+              }
+            });
+          } else {
+            console.log('No employee ID found for current user');
+            this.loading = false;
+          }
         },
         error: (err) => {
-          console.error('Error loading pending timesheets:', err);
+          console.error('Error getting current employee ID:', err);
           this.loading = false;
         }
       });
