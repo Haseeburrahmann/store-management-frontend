@@ -54,12 +54,6 @@ export const routes: Routes = [
         data: { requiredPermission: 'employees:read' }
       },
       {
-        path: 'hours',
-        loadChildren: () => import('./features/hours/hours.routes').then(m => m.HOURS_ROUTES),
-        canActivate: [AuthGuard],
-        data: { requiredPermission: 'hours:read' }
-      },
-      {
         path: 'auth-test',
         loadComponent: () => import('./shared/components/auth-test/auth-test.component').then(m => m.AuthTestComponent)
       },
