@@ -211,5 +211,25 @@ export class EmployeeService {
     };
   }
 
+ /**
+ * Get employee by user ID
+ */
+getEmployeeByUserId(userId: string): Observable<Employee | null> {
+  // Create params to filter by user_id
+  let params = new HttpParams().set('user_id', userId);
+  
+  return this.http.get<Employee[]>(this.apiUrl, { params }).pipe(
+    switchMap(employees => this.enhanceEmployeeData(employees)),
+    map(employees => employees.length > 0 ? employees[0] : null),
+    tap(employee => {
+      if (employee) {
+        console.log(`Found employee for user id=${userId}`);
+      } else {
+        console.log(`No employee found for user id=${userId}`);
+      }
+    }),
+    catchError(this.handleError<Employee | null>(`getEmployeeByUserId userId=${userId}`, null))
+  );
+}
   
 }

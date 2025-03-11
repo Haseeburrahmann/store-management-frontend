@@ -410,14 +410,59 @@ export class ScheduleFormComponent implements OnInit {
       return;
     }
     
+    // Ensure ALL shifts have complete data structure
+    if (this.schedule.shifts) {
+      this.schedule.shifts = this.schedule.shifts.map(shift => {
+        // Create a new object that matches the ScheduleShift interface
+        const normalizedShift: ScheduleShift = {
+          employee_id: shift.employee_id,
+          date: shift.date,
+          start_time: shift.start_time,
+          end_time: shift.end_time
+        };
+        
+        // Add optional properties according to the interface
+        if (shift._id) {
+          normalizedShift._id = shift._id;
+        } else {
+          normalizedShift._id = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        }
+        
+        // Handle notes - convert null to undefined to match interface
+        if (shift.notes !== null) {
+          normalizedShift.notes = shift.notes;
+        }
+        
+        // Copy employee_name if it exists
+        if (shift.employee_name) {
+          normalizedShift.employee_name = shift.employee_name;
+        }
+        
+        return normalizedShift;
+      });
+    }
+    
+    // Log what we're about to submit
+    console.log('Submitting schedule update:', JSON.stringify(this.schedule));
+    
     this.loading = true;
     
     if (this.isEditMode) {
       // Update existing schedule
       this.hoursService.updateSchedule(this.scheduleId, this.schedule).subscribe({
         next: (updatedSchedule) => {
+          console.log('Update successful:', updatedSchedule);
           this.loading = false;
-          this.navigateToScheduleList();
+          
+          // Verify if all shifts were saved correctly
+          if (updatedSchedule.shifts?.length !== this.schedule.shifts?.length) {
+            console.warn(`Warning: Server returned ${updatedSchedule.shifts?.length} shifts, but ${this.schedule.shifts?.length} were sent.`);
+          }
+          
+          // Add a slight delay before navigating to ensure state updates are complete
+          setTimeout(() => {
+            this.navigateToScheduleList();
+          }, 300);
         },
         error: (err) => {
           console.error('Error updating schedule:', err);
@@ -429,8 +474,18 @@ export class ScheduleFormComponent implements OnInit {
       // Create new schedule
       this.hoursService.createSchedule(this.schedule).subscribe({
         next: (newSchedule) => {
+          console.log('Creation successful:', newSchedule);
           this.loading = false;
-          this.navigateToScheduleList();
+          
+          // Verify if all shifts were saved correctly
+          if (newSchedule.shifts?.length !== this.schedule.shifts?.length) {
+            console.warn(`Warning: Server returned ${newSchedule.shifts?.length} shifts, but ${this.schedule.shifts?.length} were sent.`);
+          }
+          
+          // Add a slight delay before navigating
+          setTimeout(() => {
+            this.navigateToScheduleList();
+          }, 300);
         },
         error: (err) => {
           console.error('Error creating schedule:', err);
@@ -440,7 +495,7 @@ export class ScheduleFormComponent implements OnInit {
       });
     }
   }
-  
+    
   validateSchedule(): boolean {
     // Basic validation
     if (!this.schedule.title) {
@@ -488,6 +543,9 @@ export class ScheduleFormComponent implements OnInit {
   }
   
   navigateToScheduleList(): void {
-    this.router.navigate(['/hours/schedules']);
+    // Add a timestamp parameter to force a refresh of the list
+    this.router.navigate(['/hours/schedules'], {
+      queryParams: { refresh: Date.now() }
+    });
   }
 }
