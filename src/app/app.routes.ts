@@ -1,4 +1,4 @@
-// src/app/app.routes.ts - Update to include hours routes
+// src/app/app.routes.ts
 import { Routes } from '@angular/router';
 import { AuthLayoutComponent } from './layouts/auth-layout/auth-layout.component';
 import { MainLayoutComponent } from './layouts/main-layout/main-layout.component';
@@ -52,6 +52,18 @@ export const routes: Routes = [
         loadChildren: () => import('./features/employees/employees.routes').then(m => m.EMPLOYEE_ROUTES),
         canActivate: [AuthGuard],
         data: { requiredPermission: 'employees:read' }
+      },
+      {
+        path: 'timesheets',
+        loadChildren: () => import('./features/timesheets/timesheets.routes').then(m => m.TIMESHEET_ROUTES),
+        canActivate: [AuthGuard],
+        data: { requiredPermission: 'hours:read' }
+      },
+      {
+        path: 'schedules',
+        loadChildren: () => import('./features/schedules/schedules.routes').then(m => m.SCHEDULE_ROUTES),
+        canActivate: [AuthGuard],
+        data: { requiredPermission: 'hours:read' }
       },
       {
         path: 'auth-test',

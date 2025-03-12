@@ -96,7 +96,7 @@ import { HasPermissionDirective } from '../../../shared/directives/has-permissio
           </div>
           <div>
             <div class="text-sm text-[var(--text-secondary)]">Shifts</div>
-            <div>{{ currentWeekSchedule.shifts.length }}</div>
+            <div>{{ currentWeekSchedule.shift_count }}</div>
           </div>
         </div>
         
@@ -131,7 +131,7 @@ import { HasPermissionDirective } from '../../../shared/directives/has-permissio
               </div>
               <div class="text-right">
                 <div class="text-sm text-[var(--text-secondary)]">Shifts</div>
-                <div class="font-medium">{{ schedule.shifts.length }}</div>
+                <div class="font-medium">{{ schedule.shift_count || 0 }}</div>
               </div>
             </div>
             
@@ -148,14 +148,14 @@ import { HasPermissionDirective } from '../../../shared/directives/has-permissio
               </div>
               
               <!-- Preview of shifts (first few) -->
-              <div *ngIf="schedule.shifts.length > 0" class="mt-4">
+              <div *ngIf="schedule.shifts && schedule.shifts.length > 0" class="mt-4">
                 <div class="text-sm font-medium mb-2">Shift Preview:</div>
                 <div class="space-y-1">
                   <div *ngFor="let shift of getPreviewShifts(schedule.shifts); let i = index" class="text-sm">
                     <span class="text-[var(--text-primary)]">{{ getDayName(shift.day_of_week) }}:</span>
                     <span class="text-[var(--text-secondary)] ml-1">{{ shift.employee_name || 'Employee' }} ({{ formatShiftTime(shift.start_time) }} - {{ formatShiftTime(shift.end_time) }})</span>
                   </div>
-                  <div *ngIf="schedule.shifts.length > 3" class="text-sm text-[var(--text-secondary)] italic">
+                  <div *ngIf="schedule.shifts && schedule.shifts.length > 3" class="text-sm text-[var(--text-secondary)] italic">
                     And {{ schedule.shifts.length - 3 }} more shifts...
                   </div>
                 </div>
@@ -275,6 +275,7 @@ export class ScheduleListComponent implements OnInit {
   }
   
   loadSchedules(): void {
+    debugger;
     this.loading = true;
     
     const options: any = {
@@ -306,20 +307,47 @@ export class ScheduleListComponent implements OnInit {
           return today >= startDate && today <= endDate;
         }) || null;
         
-        // For real pagination, we would get the total count from the API
-        // For now, we'll estimate based on the returned results
-        if (schedules.length === this.pageSize) {
-          // If we got a full page, there are probably more
-          this.totalSchedules = (this.currentPage * this.pageSize) + 1;
-        } else if (schedules.length > 0) {
-          // If we got a partial page, this is the last page
-          this.totalSchedules = ((this.currentPage - 1) * this.pageSize) + schedules.length;
-        } else {
-          // If we got no results, either there are no results or we're past the end
-          this.totalSchedules = (this.currentPage - 1) * this.pageSize;
-        }
+        // Process each schedule to ensure data is complete
+        const storePromises: Promise<void>[] = [];
+        debugger;
+        this.schedules.forEach(schedule => {
+          // Ensure shifts array exists
+          if (!schedule.shifts) {
+            schedule.shifts = [];
+          }
+          
+          // If store name is missing but we have store_id, fetch store details
+          if (!schedule.store_name && schedule.store_id) {
+            const promise = new Promise<void>((resolve) => {
+              this.storeService.getStoreById(schedule.store_id).subscribe({
+                next: (store) => {
+                  schedule.store_name = store.name;
+                  resolve();
+                },
+                error: (err) => {
+                  console.error(`Error fetching store for schedule ${schedule._id}:`, err);
+                  schedule.store_name = 'Unknown Store';
+                  resolve();
+                }
+              });
+            });
+            storePromises.push(promise);
+          }
+        });
         
-        this.loading = false;
+        // Wait for all store lookups to complete
+        Promise.all(storePromises).then(() => {
+          // For real pagination, we would get the total count from the API
+          if (schedules.length === this.pageSize) {
+            this.totalSchedules = (this.currentPage * this.pageSize) + 1;
+          } else if (schedules.length > 0) {
+            this.totalSchedules = ((this.currentPage - 1) * this.pageSize) + schedules.length;
+          } else {
+            this.totalSchedules = (this.currentPage - 1) * this.pageSize;
+          }
+          
+          this.loading = false;
+        });
       },
       error: (err) => {
         console.error('Error loading schedules:', err);
@@ -361,6 +389,7 @@ export class ScheduleListComponent implements OnInit {
   }
   
   getPreviewShifts(shifts: any[]): any[] {
+    if (!shifts || !Array.isArray(shifts)) return [];
     return shifts.slice(0, 3);
   }
   

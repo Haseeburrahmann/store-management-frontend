@@ -5,13 +5,22 @@ import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { StoreStatsWidgetComponent } from './widgets/store-stats-widget/store-stats-widget.component';
 import { EmployeeStatsWidgetComponent } from "./widgets/employee-stats-widget/employee-stats-widget.component";
+import { TimesheetStatsWidgetComponent } from "./widgets/timesheet-stats-widget/timesheet-stats-widget.component";
+import { ScheduleStatsWidgetComponent } from "./widgets/schedule-stats-widget/schedule-stats-widget.component";
 import { PendingApprovalsWidgetComponent } from "./widgets/pending-approvals-widget/pending-approvals-widget.component";
-import { HoursStatsWidgetComponent } from "./widgets/hours-stats-widget/hours-stats-widget.component";
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink, StoreStatsWidgetComponent, EmployeeStatsWidgetComponent, PendingApprovalsWidgetComponent, HoursStatsWidgetComponent],
+  imports: [
+    CommonModule, 
+    RouterLink, 
+    StoreStatsWidgetComponent, 
+    EmployeeStatsWidgetComponent, 
+    TimesheetStatsWidgetComponent,
+    ScheduleStatsWidgetComponent,
+    PendingApprovalsWidgetComponent
+  ],
   template: `
     <div class="container mx-auto">
       <!-- Welcome section -->
@@ -28,14 +37,14 @@ import { HoursStatsWidgetComponent } from "./widgets/hours-stats-widget/hours-st
         <!-- Active Stores -->
         <app-store-stats-widget></app-store-stats-widget>
         
-        <!-- Hours This Week -->
-         <!-- Hours This Week -->
-         <app-hours-stats-widget></app-hours-stats-widget>
+        <!-- Timesheet Status -->
+        <app-timesheet-stats-widget></app-timesheet-stats-widget>
+        
+        <!-- Schedule Status -->
+        <app-schedule-stats-widget></app-schedule-stats-widget>
         
         <!-- Pending Approvals -->
-        <app-pending-approvals-widget></app-pending-approvals-widget>
-        
-        
+        <app-pending-approvals-widget class="lg:col-span-4"></app-pending-approvals-widget>
       </div>
       
       <!-- Recent Activity -->

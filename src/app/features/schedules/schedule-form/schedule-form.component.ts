@@ -12,7 +12,15 @@ import { Store } from '../../../shared/models/store.model';
 import { Employee } from '../../../shared/models/employee.model';
 import { DateTimeUtils } from '../../../core/utils/date-time-utils.service';
 import { ErrorHandlingService } from '../../../core/utils/error-handling.service';
-import { v4 as uuidv4 } from 'uuid';
+
+// Helper function to generate UUID instead of importing the library
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, 
+        v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
 interface ShiftFormData {
   id: string;
@@ -380,7 +388,7 @@ export class ScheduleFormComponent implements OnInit {
         
         // Convert shifts to form data format
         this.shifts = schedule.shifts.map(shift => ({
-          id: shift._id || uuidv4(),
+          id: shift._id || generateUUID(),
           day: shift.day_of_week,
           employee_id: shift.employee_id,
           start_time: shift.start_time,
@@ -417,7 +425,7 @@ export class ScheduleFormComponent implements OnInit {
   addShift(): void {
     // Create a new shift
     const newShift: ShiftFormData = {
-      id: uuidv4(),
+      id: generateUUID(),
       day: this.selectedDay,
       employee_id: '',
       start_time: '09:00',  // Default start time
