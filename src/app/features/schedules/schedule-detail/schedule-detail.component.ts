@@ -18,6 +18,12 @@ interface DaySchedule {
   date: Date;
   shifts: ScheduleShift[];
 }
+interface EmployeeShiftResponse extends ScheduleShift {
+  schedule_id?: string;
+  schedule_title?: string;
+  store_id?: string;
+  store_name?: string;
+}
 
 @Component({
   selector: 'app-schedule-detail',
@@ -83,9 +89,11 @@ interface DaySchedule {
             <div>{{ formatDateWithTime(schedule.created_at) }}</div>
             
             <div class="mt-2">
-              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                {{ schedule.shifts.length }} Shifts
-              </span>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+  {{ userRole === 'admin' || userRole === 'manager' ? 
+     (fullSchedule?.shifts?.length || 0) : 
+     getVisibleShifts().length }} Shifts
+</span>
             </div>
           </div>
         </div>
@@ -109,21 +117,26 @@ interface DaySchedule {
                   {{ formatDayDate(day.date) }}
                 </td>
                 <td class="py-3 px-4 border border-[var(--border-color)] align-top">
-                  <div *ngIf="day.shifts.length === 0" class="text-[var(--text-secondary)] italic">
-                    No shifts scheduled
-                  </div>
+                <div *ngIf="day.shifts.length === 0" class="text-[var(--text-secondary)] italic">
+  No shifts scheduled{{ userRole === 'employee' ? ' for you' : '' }}
+</div>
                   
-                  <div *ngFor="let shift of day.shifts" class="mb-2 p-2 bg-[var(--bg-main)] rounded">
-                    <div class="flex justify-between">
-                      <div class="font-medium">{{ shift.employee_name }}</div>
-                      <div class="text-[var(--text-secondary)]">
-                        {{ formatShiftTime(shift.start_time) }} - {{ formatShiftTime(shift.end_time) }}
-                      </div>
-                    </div>
-                    <div *ngIf="shift.notes" class="mt-1 text-sm text-[var(--text-secondary)] italic">
-                      {{ shift.notes }}
-                    </div>
-                  </div>
+<div *ngFor="let shift of day.shifts" class="mb-2 p-2 bg-[var(--bg-main)] rounded">
+    <div class="flex justify-between">
+      <div class="font-medium">
+        <!-- Show proper employee name with (You) indicator -->
+        {{ shift.employee_name || (isCurrentEmployee(shift.employee_id) ? authService.currentUser?.full_name || 'Current Employee' : 'Unknown Employee') }}
+        <span *ngIf="isCurrentEmployee(shift.employee_id)" 
+            class="ml-1 text-xs text-green-600 dark:text-green-400">
+        (You)
+        </span>
+      </div>
+      <div>{{ formatShiftTime(shift.start_time) }} - {{ formatShiftTime(shift.end_time) }}</div>
+    </div>
+    <div *ngIf="shift.notes" class="mt-1 text-sm text-[var(--text-secondary)] italic">
+      {{ shift.notes }}
+    </div>
+  </div>
                 </td>
               </tr>
             </tbody>
@@ -146,7 +159,9 @@ interface DaySchedule {
       
       <!-- Employee Schedule View -->
       <div *ngIf="!loading && schedule && employeeShifts.length > 0" class="card">
-        <h2 class="text-lg font-semibold mb-4">Employee Schedule Summary</h2>
+      <h2 class="text-lg font-semibold mb-4">
+  {{ userRole === 'employee' ? 'Your Schedule Summary' : 'Employee Schedule Summary' }}
+</h2>
         
         <div class="space-y-4">
           <div *ngFor="let employee of employeeShifts" class="border rounded-lg overflow-hidden">
@@ -187,18 +202,26 @@ export class ScheduleDetailComponent implements OnInit {
   error = '';
   scheduleId = '';
   schedule: Schedule | null = null;
+  fullSchedule: Schedule | null = null;
   
   dailySchedules: DaySchedule[] = [];
   employeeShifts: { id: string, name: string, shifts: ScheduleShift[] }[] = [];
   
+  // User info
+  currentEmployeeId: string | null = null;
+  userRole: 'admin' | 'manager' | 'employee' | 'unknown' = 'unknown';
+  
   constructor(
     private hoursService: HoursService,
     private storeService: StoreService,
-    private authService: AuthService,
+    public authService: AuthService,
     private permissionService: PermissionService,
     private route: ActivatedRoute,
     private router: Router
-  ) {}
+  ) {
+    // Determine user role
+    this.userRole = this.permissionService.getRoleIdentifier();
+  }
   
   ngOnInit(): void {
     this.scheduleId = this.route.snapshot.paramMap.get('id') || '';
@@ -208,25 +231,136 @@ export class ScheduleDetailComponent implements OnInit {
       return;
     }
     
-    this.loadSchedule();
-  }
-  
-  loadSchedule(): void {
-    this.hoursService.getSchedule(this.scheduleId).subscribe({
-      next: (schedule) => {
-        this.schedule = schedule;
-        this.organizeDailySchedules();
-        this.organizeEmployeeShifts();
-        this.loading = false;
-      },
-      error: (err) => {
-        console.error('Error loading schedule:', err);
-        this.error = ErrorHandlingService.getErrorMessage(err);
-        this.loading = false;
-      }
+    // Get the current user's ID and employee ID
+    const currentUser = this.authService.currentUser;
+    console.log(`Current logged in user: ${currentUser?.email}, ID: ${currentUser?._id}`);
+    
+    // For employees and managers, we need their employee ID for filtering
+    this.hoursService.getCurrentEmployeeId().subscribe(employeeId => {
+      this.currentEmployeeId = employeeId;
+      console.log(`Employee ID for current user: ${this.currentEmployeeId}`);
+      this.loadSchedule();
     });
   }
   
+  /**
+   * Improved loadSchedule method for employee role with employee name handling
+   */
+  loadSchedule(): void {
+    if (!this.scheduleId) {
+      console.error('No schedule ID provided');
+      this.error = 'Invalid schedule ID';
+      this.loading = false;
+      return;
+    }
+    
+    console.log(`Loading schedule with ID: ${this.scheduleId}, for employee ID: ${this.currentEmployeeId}`);
+    
+    if (this.userRole === 'employee') {
+      console.log('Employee role detected, fetching employee-specific shifts');
+      
+      // For employees, use the schedule endpoint first to get the complete schedule
+      this.hoursService.getSchedule(this.scheduleId).subscribe({
+        next: (fullSchedule) => {
+          console.log(`Got full schedule with ${fullSchedule.shifts?.length || 0} shifts`);
+          
+          // Store the full schedule
+          this.fullSchedule = fullSchedule;
+          
+          // Filter for this employee's shifts
+          if (this.currentEmployeeId) {
+            const employeeIdStr = String(this.currentEmployeeId);
+            
+            console.log(`Filtering shifts for employee ID: ${employeeIdStr}`);
+            
+            const matchingShifts = fullSchedule.shifts.filter(shift => 
+              String(shift.employee_id) === employeeIdStr
+            );
+            
+            console.log(`Found ${matchingShifts.length} matching shifts for employee`);
+            
+            if (matchingShifts.length > 0) {
+              // Create a new schedule object with just this employee's shifts
+              this.schedule = {
+                ...fullSchedule,
+                shifts: matchingShifts
+              };
+            } else {
+              // If no matching shifts, still show the schedule but with empty shifts
+              this.schedule = {
+                ...fullSchedule,
+                shifts: []
+              };
+              this.error = 'No shifts scheduled for you in this week';
+            }
+          } else {
+            // If no employee ID, show the whole schedule
+            this.schedule = fullSchedule;
+          }
+          
+          this.organizeDailySchedules();
+          this.organizeEmployeeShifts();
+          this.loading = false;
+        },
+        error: (err) => {
+          console.error(`Error loading schedule ID=${this.scheduleId}:`, err);
+          this.error = 'Failed to load schedule: ' + err.message;
+          this.loading = false;
+        }
+      });
+    } else {
+      // For admins and managers, use the regular schedule endpoint
+      this.hoursService.getSchedule(this.scheduleId).subscribe({
+        next: (schedule) => {
+          console.log(`Successfully loaded schedule: ${schedule.title} with ${schedule.shifts?.length || 0} shifts`);
+          this.schedule = schedule;
+          this.fullSchedule = { ...schedule };
+          this.organizeDailySchedules();
+          this.organizeEmployeeShifts();
+          this.loading = false;
+        },
+        error: (err) => {
+          console.error(`Error loading schedule ID=${this.scheduleId}:`, err);
+          this.error = 'Failed to load schedule: ' + err.message;
+          this.loading = false;
+        }
+      });
+    }
+  }
+  
+  /**
+   * Calculate the week start date based on the days in shifts
+   */
+  calculateWeekStartDate(shifts: EmployeeShiftResponse[]): string {
+    // Get the current date
+    const today = new Date();
+    
+    // Find Monday of the current week
+    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Adjust for Monday as first day
+    
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - daysFromMonday);
+    monday.setHours(0, 0, 0, 0);
+    
+    return monday.toISOString().split('T')[0];
+  }
+
+  /**
+   * Calculate the week end date based on the days in shifts
+   */
+  calculateWeekEndDate(shifts: EmployeeShiftResponse[]): string {
+    // Get start date
+    const startDate = new Date(this.calculateWeekStartDate(shifts));
+    
+    // Add 6 days to get to Sunday
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
+    endDate.setHours(23, 59, 59, 999);
+    
+    return endDate.toISOString().split('T')[0];
+  }
+
   organizeDailySchedules(): void {
     if (!this.schedule) return;
     
@@ -247,8 +381,8 @@ export class ScheduleDetailComponent implements OnInit {
       const day = days[i];
       const dayName = this.getDayName(day);
       
-      // Get shifts for this day
-      const shifts = this.schedule.shifts.filter(shift => 
+      // Get visible shifts for this day based on user role
+      const visibleShifts = this.getVisibleShifts().filter(shift => 
         shift.day_of_week.toLowerCase() === day
       );
       
@@ -256,13 +390,16 @@ export class ScheduleDetailComponent implements OnInit {
         day,
         dayName,
         date: dayDate,
-        shifts
+        shifts: visibleShifts
       });
     }
   }
   
   organizeEmployeeShifts(): void {
     if (!this.schedule) return;
+    
+    // Get only visible shifts based on user role
+    const visibleShifts = this.getVisibleShifts();
     
     // Group shifts by employee
     const employeeMap = new Map<string, { 
@@ -271,21 +408,45 @@ export class ScheduleDetailComponent implements OnInit {
       shifts: ScheduleShift[] 
     }>();
     
-    this.schedule.shifts.forEach(shift => {
-      if (!employeeMap.has(shift.employee_id)) {
-        employeeMap.set(shift.employee_id, {
-          id: shift.employee_id,
-          name: shift.employee_name || 'Unknown Employee',
+    // Process shifts and group by employee
+    visibleShifts.forEach(shift => {
+      if (!shift.employee_id) return; // Skip shifts without employee ID
+      
+      const employeeId = String(shift.employee_id);
+      
+      if (!employeeMap.has(employeeId)) {
+        // Get employee name from shift or use default
+        let employeeName = shift.employee_name || 'Unknown Employee';
+        
+        // If this is the current employee, try to get name from auth service
+        if (this.isCurrentEmployee(employeeId)) {
+          const currentUser = this.authService.currentUser;
+          if (currentUser && (currentUser.full_name || currentUser.email)) {
+            employeeName = currentUser.full_name || currentUser.email;
+          }
+        }
+        
+        // Initialize employee entry in the map
+        employeeMap.set(employeeId, {
+          id: employeeId,
+          name: employeeName,
           shifts: []
         });
       }
       
-      employeeMap.get(shift.employee_id)?.shifts.push(shift);
+      // Add shift to the employee's shifts array
+      const employeeEntry = employeeMap.get(employeeId);
+      if (employeeEntry) {
+        employeeEntry.shifts.push(shift);
+      }
     });
     
     // Convert map to array and sort by employee name
     this.employeeShifts = Array.from(employeeMap.values())
       .sort((a, b) => a.name.localeCompare(b.name));
+    
+    // Log for debugging
+    console.log(`Organized ${visibleShifts.length} shifts into ${this.employeeShifts.length} employee summaries`);
   }
   
   deleteSchedule(): void {
@@ -372,5 +533,77 @@ export class ScheduleDetailComponent implements OnInit {
     const date = new Date();
     date.setHours(hours, minutes, 0, 0);
     return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+  
+  /**
+   * Returns only the shifts that should be visible to the current user
+   * based on their role
+   */
+  getVisibleShifts(): ScheduleShift[] {
+    if (!this.schedule || !this.schedule.shifts || !Array.isArray(this.schedule.shifts)) {
+      return [];
+    }
+    
+    console.log(`Filtering shifts for role: ${this.userRole}, schedule has ${this.schedule.shifts.length} total shifts`);
+    
+    // For admins, show all shifts
+    if (this.userRole === 'admin') {
+      console.log(`Admin: Showing all ${this.schedule.shifts.length} shifts`);
+      return this.schedule.shifts;
+    }
+    
+    // For managers, show all shifts for stores they manage
+    if (this.userRole === 'manager') {
+      console.log(`Manager: Showing all ${this.schedule.shifts.length} shifts for this store`);
+      return this.schedule.shifts;
+    }
+    
+    // For employees, only show their own shifts
+    if (this.userRole === 'employee' && this.currentEmployeeId) {
+      const employeeIdStr = String(this.currentEmployeeId);
+      console.log(`Employee: filtering shifts for employee ID: ${employeeIdStr}`);
+      
+      // Get current user to debug the issue
+      const currentUser = this.authService.currentUser;
+      console.log(`Current logged in user email: ${currentUser?.email}`);
+      
+      // Filter shifts by employee ID
+      const filteredShifts = this.schedule.shifts.filter(shift => {
+        if (!shift.employee_id) return false;
+        
+        // Convert both to strings to ensure proper comparison
+        const shiftEmployeeId = String(shift.employee_id);
+        
+        console.log(`Comparing: shift employee ID ${shiftEmployeeId} with current employee ID ${employeeIdStr}`);
+        const matches = shiftEmployeeId === employeeIdStr;
+        
+        if (matches) {
+          console.log(`Found matching shift for day: ${shift.day_of_week}`);
+        }
+        
+        return matches;
+      });
+      
+      console.log(`Employee view: Found ${filteredShifts.length} shifts out of ${this.schedule.shifts.length}`);
+      return filteredShifts;
+    }
+    
+    // Default case - return all shifts
+    return this.schedule.shifts;
+  }
+  
+  /**
+   * Improved version that uses String comparison for employee IDs
+   */
+  isCurrentEmployee(employeeId: any): boolean {
+    if (!this.currentEmployeeId || !employeeId) return false;
+    
+    const currentIdStr = String(this.currentEmployeeId);
+    const shiftEmployeeIdStr = String(employeeId);
+    
+    // For debugging
+    console.log(`Comparing employee IDs: current=${currentIdStr}, shift=${shiftEmployeeIdStr}`);
+    
+    return currentIdStr === shiftEmployeeIdStr;
   }
 }

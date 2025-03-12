@@ -64,49 +64,56 @@ export class ScheduleStatsWidgetComponent implements OnInit {
   }
   
   loadScheduleStats(): void {
-    // Get current date info
-    const today = new Date();
-    
-    // Create date range for current week
-    const startOfWeek = new Date(today);
-    const currentDay = today.getDay(); // 0 is Sunday, 1 is Monday, etc.
-    const diff = currentDay === 0 ? 6 : currentDay - 1; // Adjust to get Monday
-    startOfWeek.setDate(today.getDate() - diff);
-    startOfWeek.setHours(0, 0, 0, 0);
-    
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    endOfWeek.setHours(23, 59, 59, 999);
-    
-    const options = {
-      start_date: DateTimeUtils.formatDateForAPI(startOfWeek),
-      end_date: DateTimeUtils.formatDateForAPI(endOfWeek),
-      current: true,
-      limit: 1
-    };
-    
-    this.hoursService.getSchedules(options).subscribe({
-      next: (schedules) => {
-        if (schedules && schedules.length > 0) {
-          const currentSchedule = schedules[0];
-          this.hasCurrentSchedule = true;
-          this.shiftsCount = currentSchedule.shifts.length;
+    // If user is an employee, use the employee-specific endpoint
+    if (this.permissionService.getRoleIdentifier() === 'employee') {
+      console.log('Employee role, using employee/me endpoint for schedule stats');
+      
+      this.hoursService.getMyScheduleShifts().subscribe({
+        next: (shifts) => {
+          const hasShifts = shifts && shifts.length > 0;
+          this.hasCurrentSchedule = hasShifts;
+          this.shiftsCount = hasShifts ? shifts.length : 0;
           
-          // Find next shift (if any)
-          this.calculateNextShift(currentSchedule.shifts);
-        } else {
-          this.hasCurrentSchedule = false;
-          this.shiftsCount = 0;
-          this.nextShiftInfo = '';
+          if (hasShifts) {
+            console.log(`Found ${shifts.length} shifts for current employee`);
+            this.calculateNextShift(shifts);
+          } else {
+            this.nextShiftInfo = '';
+          }
+          
+          this.loading = false;
+        },
+        error: (err) => {
+          console.error('Error loading employee schedule stats:', err);
+          this.loading = false;
         }
-        
-        this.loading = false;
-      },
-      error: (err) => {
-        console.error('Error loading schedule stats:', err);
-        this.loading = false;
-      }
-    });
+      });
+    } else {
+      // For admin/manager, use the getCurrentSchedule method
+      this.hoursService.getCurrentSchedule().subscribe({
+        next: (schedule) => {
+          if (schedule && schedule.shifts && schedule.shifts.length > 0) {
+            console.log(`Schedule stats widget: Found current schedule with ${schedule.shifts.length} shifts`);
+            this.hasCurrentSchedule = true;
+            this.shiftsCount = schedule.shifts.length;
+            
+            // Find next shift (if any)
+            this.calculateNextShift(schedule.shifts);
+          } else {
+            console.log('Schedule stats widget: No current schedule found');
+            this.hasCurrentSchedule = false;
+            this.shiftsCount = 0;
+            this.nextShiftInfo = '';
+          }
+          
+          this.loading = false;
+        },
+        error: (err) => {
+          console.error('Error loading schedule stats:', err);
+          this.loading = false;
+        }
+      });
+    }
   }
   
   calculateNextShift(shifts: any[]): void {

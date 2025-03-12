@@ -195,44 +195,44 @@ export class PendingApprovalsWidgetComponent implements OnInit {
   }
   
   loadCurrentSchedule(): void {
-    // Get current date info
-    const today = new Date();
+    console.log('Loading current schedule for dashboard widget');
     
-    // Create date range for current week
-    const startOfWeek = new Date(today);
-    const currentDay = today.getDay(); // 0 is Sunday, 1 is Monday, etc.
-    const diff = currentDay === 0 ? 6 : currentDay - 1; // Adjust to get Monday
-    startOfWeek.setDate(today.getDate() - diff);
-    startOfWeek.setHours(0, 0, 0, 0);
-    
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    endOfWeek.setHours(23, 59, 59, 999);
-    
-    // Format dates for API
-    const startDate = startOfWeek.toISOString().split('T')[0];
-    const endDate = endOfWeek.toISOString().split('T')[0];
-    
-    this.hoursService.getSchedules({
-      start_date: startDate,
-      end_date: endDate,
-      limit: 1
-    }).subscribe({
-      next: (schedules) => {
-        if (schedules && schedules.length > 0) {
-          this.hasCurrentSchedule = true;
-          this.currentScheduleShifts = schedules[0].shifts.length;
-        } else {
+    // If user is an employee, use the employee-specific endpoint
+    if (this.permissionService.getRoleIdentifier() === 'employee') {
+      this.hoursService.getMyScheduleShifts().subscribe({
+        next: (shifts) => {
+          const hasShifts = shifts && shifts.length > 0;
+          this.hasCurrentSchedule = hasShifts;
+          this.currentScheduleShifts = hasShifts ? shifts.length : 0;
+          this.loading.schedules = false;
+        },
+        error: (err) => {
+          console.error('Error loading employee schedule:', err);
+          this.loading.schedules = false;
           this.hasCurrentSchedule = false;
-          this.currentScheduleShifts = 0;
         }
-        this.loading.schedules = false;
-      },
-      error: (err) => {
-        console.error('Error loading current schedule:', err);
-        this.loading.schedules = false;
-        this.hasCurrentSchedule = false;
-      }
-    });
+      });
+    } else {
+      // Use the getCurrentSchedule method for admins/managers
+      this.hoursService.getCurrentSchedule().subscribe({
+        next: (schedule) => {
+          if (schedule && schedule.shifts && schedule.shifts.length > 0) {
+            console.log(`Found current schedule with ${schedule.shifts.length} shifts`);
+            this.hasCurrentSchedule = true;
+            this.currentScheduleShifts = schedule.shifts.length;
+          } else {
+            console.log('No current schedule found or no shifts in schedule');
+            this.hasCurrentSchedule = false;
+            this.currentScheduleShifts = 0;
+          }
+          this.loading.schedules = false;
+        },
+        error: (err) => {
+          console.error('Error loading current schedule:', err);
+          this.loading.schedules = false;
+          this.hasCurrentSchedule = false;
+        }
+      });
+    }
   }
 }

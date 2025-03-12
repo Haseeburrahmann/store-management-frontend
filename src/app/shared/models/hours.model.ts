@@ -53,3 +53,4 @@ export interface ScheduleShift {
   end_time: string;     // In 'HH:MM' format
   notes?: string;
 }
+

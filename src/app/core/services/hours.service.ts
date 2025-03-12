@@ -11,6 +11,15 @@ import { PermissionService } from '../auth/permission.service';
 import { IdUtils } from '../utils/id-utils.service';
 import { DateTimeUtils } from '../utils/date-time-utils.service';
 import { ErrorHandlingService } from '../utils/error-handling.service';
+import { Employee } from '../../shared/models/employee.model';
+
+
+interface EmployeeShiftResponse extends ScheduleShift {
+  schedule_id?: string;
+  schedule_title?: string;
+  store_id?: string;
+  store_name?: string;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -263,18 +272,65 @@ export class HoursService {
   }
   
   /**
-   * Get a specific schedule by ID
+   * Get a specific schedule by ID with improved error handling and ID validation
    */
   getSchedule(id: string): Observable<Schedule> {
+    // Validate the ID before sending the request
+    if (!id || typeof id !== 'string') {
+      console.error(`Invalid schedule ID provided: ${id}, type: ${typeof id}`);
+      return throwError(() => new Error('Invalid schedule ID format'));
+    }
+    
+    // Check if the ID appears to be a shift ID instead of a schedule ID
+    if (id.includes('shift')) {
+      console.error(`Possible shift ID detected instead of schedule ID: ${id}`);
+      return throwError(() => new Error('Invalid schedule ID - appears to be a shift ID'));
+    }
+    
     // Ensure ID is string format
     const safeId = IdUtils.ensureString(id);
     
+    console.log(`Fetching schedule with ID: ${safeId}`);
+    
     return this.http.get<Schedule>(`${this.schedulesUrl}/${safeId}`).pipe(
-      tap(_ => console.log(`Fetched schedule id=${safeId}`)),
-      catchError(ErrorHandlingService.handleError<Schedule>(`getSchedule id=${safeId}`))
+      tap(schedule => {
+        if (schedule) {
+          console.log(`Successfully fetched schedule ${schedule.title} with ${schedule.shifts?.length || 0} shifts`);
+        }
+      }),
+      catchError(error => {
+        console.error(`Error fetching schedule id=${safeId}:`, error);
+        
+        // If we got a 404, it might be because we're using a shift ID instead of a schedule ID
+        if (error.status === 404) {
+          console.error(`Schedule not found. Check if the ID ${safeId} is actually a shift ID.`);
+        }
+        
+        return throwError(() => error);
+      })
     );
   }
-  
+
+  /**
+   * Extract a valid schedule ID from a potentially complex object (schedule or shift)
+   * to prevent ID confusion
+   */
+  extractScheduleId(obj: any): string | null {
+    if (!obj) return null;
+    
+    // If it's a schedule object with an _id
+    if (obj._id && (obj.shifts || obj.week_start_date)) {
+      return obj._id;
+    }
+    
+    // If it's a shift with a schedule_id reference
+    if (obj.schedule_id) {
+      return obj.schedule_id;
+    }
+    
+    return null;
+  }
+    
   /**
    * Create a new schedule
    */
@@ -284,7 +340,7 @@ export class HoursService {
       catchError(ErrorHandlingService.handleError<Schedule>('createSchedule'))
     );
   }
-  
+    
   /**
    * Update an existing schedule
    */
@@ -297,7 +353,7 @@ export class HoursService {
       catchError(ErrorHandlingService.handleError<Schedule>(`updateSchedule id=${safeId}`))
     );
   }
-  
+    
   /**
    * Delete a schedule
    */
@@ -310,7 +366,7 @@ export class HoursService {
       catchError(ErrorHandlingService.handleError<boolean>(`deleteSchedule id=${safeId}`))
     );
   }
-  
+    
   /**
    * Add a shift to a schedule
    */
@@ -323,7 +379,7 @@ export class HoursService {
       catchError(ErrorHandlingService.handleError<Schedule>(`addShift scheduleId=${safeScheduleId}`))
     );
   }
-  
+    
   /**
    * Update a shift in a schedule
    */
@@ -337,7 +393,7 @@ export class HoursService {
       catchError(ErrorHandlingService.handleError<Schedule>(`updateShift scheduleId=${safeScheduleId}, shiftId=${safeShiftId}`))
     );
   }
-  
+    
   /**
    * Delete a shift from a schedule
    */
@@ -351,7 +407,7 @@ export class HoursService {
       catchError(ErrorHandlingService.handleError<Schedule>(`deleteShift scheduleId=${safeScheduleId}, shiftId=${safeShiftId}`))
     );
   }
-  
+    
   /**
    * Get schedule for specific employee
    */
@@ -369,9 +425,9 @@ export class HoursService {
       catchError(ErrorHandlingService.handleError<ScheduleShift[]>(`getEmployeeSchedule employeeId=${safeEmployeeId}`, []))
     );
   }
-  
+    
   // ======== Helper Methods ========
-  
+    
   /**
    * Check if the current user is an admin
    */
@@ -380,37 +436,42 @@ export class HoursService {
     // Admin role ID
     return currentUser?.role_id === '67c9fb4d9db05f47c32b6b22';
   }
-  
+    
   /**
    * Get current employee ID from the authenticated user
    * Returns an Observable that emits the employee ID or null if no employee record exists
    */
   public getCurrentEmployeeId(): Observable<string | null> {
+    console.log('Getting current employee ID using employees/me endpoint');
+    
     // Get the current user
     const currentUser = this.authService.currentUser;
     if (!currentUser) {
-      console.log('No authenticated user found');
+      console.error('No authenticated user found');
       return of(null);
     }
     
+    console.log('Current user:', currentUser.email, 'User ID:', currentUser._id);
+    
     // If user is admin, they don't have an employee record
-    if (this.isAdminUser()) {
+    if (this.permissionService.isAdmin()) {
       console.log('User is an admin without employee record');
       return of(null);
     }
     
-    // For regular employees, check if they have an employee record
-    return this.employeeService.getEmployeeByUserId(currentUser._id).pipe(
+    // Use the EmployeeService to get the current employee profile
+    return this.http.get<Employee>('/api/v1/employees/me').pipe(
       map(employee => {
         if (employee) {
-          return IdUtils.ensureString(employee._id);
+          console.log(`Found employee record for current user: ID ${employee._id}, Name: ${employee.full_name}`);
+          return employee._id;
         } else {
-          console.log('No employee record found for user ID: ' + currentUser._id);
+          console.error('No employee record found for current user');
           return null;
         }
       }),
       catchError(error => {
-        console.error('Error fetching employee record:', error);
+        console.error('Error fetching current employee record:', error);
         return of(null);
       })
     );
@@ -439,11 +500,221 @@ export class HoursService {
     result.setHours(23, 59, 59, 999);
     return result;
   }
-  
+    
   /**
    * Calculate total hours from daily hours object
    */
   calculateTotalHours(dailyHours: { [key: string]: number }): number {
     return Object.values(dailyHours).reduce((total, hours) => total + hours, 0);
   }
+
+ /**
+ * Get current user's schedule for the current week
+ * with improved employee data handling
+ */
+getCurrentSchedule(): Observable<Schedule | null> {
+  console.log('Fetching current schedule, user role:', this.permissionService.getRoleIdentifier());
+  
+  // For admins and managers - use the regular schedule endpoint
+  if (this.permissionService.isAdmin() || this.permissionService.isManager()) {
+    console.log('Admin/Manager: Fetching schedule via regular endpoint');
+    
+    // Calculate current week dates
+    const today = new Date();
+    const currentWeekStart = this.getStartOfWeek(today);
+    const currentWeekEnd = this.getEndOfWeek(today);
+    const startDate = DateTimeUtils.formatDateForAPI(currentWeekStart);
+    const endDate = DateTimeUtils.formatDateForAPI(currentWeekEnd);
+    
+    return this.getSchedules({
+      start_date: startDate,
+      end_date: endDate,
+      limit: 1
+    }).pipe(
+      map(schedules => {
+        if (schedules && schedules.length > 0) {
+          console.log(`Found schedule with ${schedules[0].shifts?.length || 0} shifts`);
+          return schedules[0];
+        }
+        return null;
+      }),
+      catchError(error => {
+        console.error('Error fetching schedules:', error);
+        return of(null);
+      })
+    );
+  }
+  
+  // For employees - DIRECTLY use the employee/me endpoint
+  console.log('Employee: Using employee/me endpoint directly');
+  
+  // Direct API call to get employee shifts - this returns exactly what we need
+  return this.http.get<EmployeeShiftResponse[]>(`${this.schedulesUrl}/employee/me`).pipe(
+    tap(shifts => console.log(`Got ${shifts.length} shifts from employee/me endpoint`)),
+    map(shifts => {
+      if (!shifts || shifts.length === 0) {
+        console.log('No shifts found from employee/me endpoint');
+        return null;
+      }
+      
+      // Log first shift for debugging
+      console.log('First shift from API:', shifts[0]);
+      
+      // Add employee_name if missing
+      shifts.forEach(shift => {
+        if (!shift.employee_name) {
+          // Try to get employee name from auth service
+          const currentUser = this.authService.currentUser;
+          if (currentUser) {
+            shift.employee_name = currentUser.full_name || currentUser.email || 'Current Employee';
+          } else {
+            shift.employee_name = 'Current Employee';
+          }
+        }
+      });
+      
+      // Extract common schedule data from the first shift
+      const firstShift = shifts[0];
+      const scheduleId = firstShift.schedule_id || '';
+      const storeId = firstShift.store_id || '';
+      const storeName = firstShift.store_name || '';
+      const scheduleTitle = firstShift.schedule_title || 'Current Schedule';
+      
+      console.log(`Creating schedule object from shifts. Schedule ID: ${scheduleId}, Store: ${storeName}`);
+      
+      // Calculate week dates based on the day of the first shift
+      const today = new Date();
+      const weekStart = this.getStartOfWeek(today);
+      const weekEnd = this.getEndOfWeek(today);
+      
+      // Build a Schedule object from the shifts
+      const schedule: Schedule = {
+        _id: scheduleId,
+        title: scheduleTitle,
+        store_id: storeId,
+        store_name: storeName,
+        week_start_date: DateTimeUtils.formatDateForAPI(weekStart),
+        week_end_date: DateTimeUtils.formatDateForAPI(weekEnd),
+        shifts: shifts as unknown as ScheduleShift[],
+        shift_count: shifts.length, // Add shift_count property
+        created_by: '',  // Required by the interface
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString() // Add updated_at if needed
+      };
+      
+      console.log(`Created schedule with ${shifts.length} shifts`);
+      return schedule;
+    }),
+    catchError(error => {
+      console.error('Error fetching employee shifts:', error);
+      return of(null);
+    })
+  );
+}
+
+  /**
+ * Get employee-specific shifts directly from the employee/me endpoint
+ * with better handling for when employee shifts don't come through properly
+ */
+getMyScheduleShifts(scheduleId?: string): Observable<EmployeeShiftResponse[]> {
+  console.log('Fetching employee shifts' + (scheduleId ? ` for schedule: ${scheduleId}` : ''));
+  
+  // Build params
+  let params = new HttpParams();
+  
+  if (scheduleId) {
+    params = params.set('schedule_id', scheduleId);
+  } else {
+    // If no specific schedule ID, add current week date range
+    const today = new Date();
+    
+    // Get Monday of current week (start of week)
+    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+    monday.setHours(0, 0, 0, 0);
+    
+    // Get Sunday of current week (end of week)
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+    
+    console.log(`Using date range: ${monday.toISOString().split('T')[0]} to ${sunday.toISOString().split('T')[0]}`);
+    
+    params = params
+      .set('start_date', monday.toISOString().split('T')[0])
+      .set('end_date', sunday.toISOString().split('T')[0]);
+  }
+  
+  // Get current user info to add to shifts if needed
+  const currentUser = this.authService.currentUser;
+  
+  // Direct call to employee/me endpoint
+  return this.http.get<EmployeeShiftResponse[]>(`${this.schedulesUrl}/employee/me`, { params }).pipe(
+    tap(shifts => {
+      console.log(`Received ${shifts.length} shifts from employee/me endpoint`);
+      
+      // Ensure every shift has proper employee_name and employee_id
+      shifts.forEach((shift, index) => {
+        if (!shift.employee_name && currentUser) {
+          shift.employee_name = currentUser.full_name || currentUser.email || 'Current Employee';
+        }
+        
+        console.log(`Shift ${index + 1}: Day=${shift.day_of_week}, Time=${shift.start_time}-${shift.end_time}, Schedule=${shift.schedule_title || 'Unknown'}, Employee=${shift.employee_name || 'Unknown'}`);
+      });
+    }),
+    switchMap(shifts => {
+      // If we didn't get any shifts but we have a schedule ID, try the regular endpoint as fallback
+      if (shifts.length === 0 && scheduleId) {
+        console.log(`No shifts found from employee/me endpoint. Trying regular schedule endpoint with ID: ${scheduleId}`);
+        
+        return this.getCurrentEmployeeId().pipe(
+          switchMap(employeeId => {
+            if (!employeeId) {
+              console.log('No employee ID found, returning empty shifts array');
+              return of([]);
+            }
+            
+            console.log(`Using employee ID: ${employeeId} to filter schedule shifts`);
+            
+            // Get the full schedule and filter for this employee's shifts
+            return this.getSchedule(scheduleId).pipe(
+              map(schedule => {
+                const employeeIdStr = String(employeeId);
+                
+                // Find shifts that belong to this employee
+                const myShifts = schedule.shifts
+                  .filter(shift => String(shift.employee_id) === employeeIdStr)
+                  .map(shift => {
+                    // Convert to EmployeeShiftResponse and add missing properties
+                    return {
+                      ...shift,
+                      schedule_id: schedule._id,
+                      schedule_title: schedule.title,
+                      store_id: schedule.store_id,
+                      store_name: schedule.store_name,
+                      employee_name: currentUser?.full_name || 'Current Employee'
+                    } as EmployeeShiftResponse;
+                  });
+                
+                console.log(`Found ${myShifts.length} shifts for employee in regular schedule`);
+                return myShifts;
+              }),
+              catchError(error => {
+                console.error(`Error fetching schedule: ${error.message}`);
+                return of([]);
+              })
+            );
+          })
+        );
+      }
+      
+      return of(shifts);
+    }),
+    catchError(error => {
+      console.error('Error fetching employee shifts:', error);
+      return of([]);
+    })
+  );
+}
 }
