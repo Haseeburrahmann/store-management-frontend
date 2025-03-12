@@ -25,7 +25,7 @@ interface NavSection {
   standalone: true,
   imports: [CommonModule, RouterLink, RouterLinkActive, HasPermissionDirective],
   template: `
-    <aside class="bg-slate-800 text-white w-64 shrink-0 hidden lg:block dark:bg-slate-900 flex flex-col h-full">
+    <aside class="bg-slate-800 text-white w-64 shrink-0 hidden lg:block dark:bg-slate-900 flex flex-col h-screen fixed top-16 left-0 z-10 overflow-y-auto">
       <div class="h-16 flex items-center px-6 border-b border-slate-700 dark:border-slate-800">
         <h1 class="text-xl font-bold text-white">Store Management</h1>
       </div>
