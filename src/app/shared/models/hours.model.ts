@@ -41,6 +41,7 @@ export interface Schedule {
   created_by: string;
   created_at?: string;
   updated_at?: string;
+  shift_count: number; // Add this field
 }
 
 export interface ScheduleShift {
