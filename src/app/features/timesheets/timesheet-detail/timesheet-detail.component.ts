@@ -7,7 +7,8 @@ import { HoursService } from '../../../core/services/hours.service';
 import { StoreService } from '../../../core/services/store.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PermissionService } from '../../../core/auth/permission.service';
-import { WeeklyTimesheet } from '../../../shared/models/hours.model';
+import { WeeklyTimesheet, TimesheetUtils } from '../../../shared/models/hours.model';
+import { Store } from '../../../shared/models/store.model';
 import { DateTimeUtils } from '../../../core/utils/date-time-utils.service';
 import { IdUtils } from '../../../core/utils/id-utils.service';
 import { ErrorHandlingService } from '../../../core/utils/error-handling.service';
@@ -33,7 +34,7 @@ export class TimesheetDetailComponent implements OnInit {
   timesheet: WeeklyTimesheet | null = null;
   
   // For new timesheet creation
-  stores: any[] = [];
+  stores: Store[] = [];
   selectedStoreId = '';
   
   // For editing
@@ -43,6 +44,9 @@ export class TimesheetDetailComponent implements OnInit {
   // Date calculation helpers
   weekDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
   weekDayDates: Date[] = [];
+  
+  // No timesheet handling improvement
+  noTimesheetMessage = '';
   
   constructor(
     private hoursService: HoursService,
@@ -77,44 +81,100 @@ export class TimesheetDetailComponent implements OnInit {
     this.storeService.getStores().subscribe({
       next: (stores) => {
         this.stores = stores;
+        console.log(`Loaded ${stores.length} stores`);
+        
+        // If we already have a timesheet, ensure store name is set
+        if (this.timesheet && !this.timesheet.store_name && this.timesheet.store_id) {
+          const store = this.stores.find(s => s._id === this.timesheet?.store_id);
+          if (store) {
+            this.timesheet.store_name = store.name;
+          }
+        }
+        
+        // If there's only one store, pre-select it for new timesheet creation
+        if (stores.length === 1 && !this.selectedStoreId) {
+          this.selectedStoreId = stores[0]._id;
+        }
       },
       error: (err) => {
         console.error('Error loading stores:', err);
+        this.error = 'Failed to load stores. Please try again later.';
+        this.loading = false;
       }
     });
   }
   
+  /**
+   * Enhanced loadCurrentTimesheet method with proper no timesheet handling
+   */
   loadCurrentTimesheet(): void {
+    debugger;
+    console.log('Loading current timesheet');
     this.hoursService.getCurrentTimesheet().subscribe({
       next: (timesheet) => {
+        console.log('Current timesheet response:', timesheet ? 'Found' : 'Not found');
         this.timesheet = timesheet;
+        
         if (timesheet) {
           this.setupDaysArray();
           this.calculateWeekDayDates(timesheet.week_start_date);
           this.timesheetNotes = timesheet.notes || '';
+          
+          // Ensure store name is populated
+          if (!timesheet.store_name && timesheet.store_id) {
+            const store = this.stores.find(s => s._id === timesheet.store_id);
+            if (store) {
+              timesheet.store_name = store.name;
+            }
+          }
+        } else {
+          // Improved no timesheet handling
+          this.noTimesheetMessage = 'You don\'t have a timesheet for the current week. You can start a new one by selecting a store below.';
         }
         this.loading = false;
       },
       error: (err) => {
+        // This case should be handled in the service now, but keeping as fallback
         console.error('Error loading current timesheet:', err);
-        this.error = ErrorHandlingService.getErrorMessage(err);
+        this.noTimesheetMessage = 'You don\'t have a timesheet for the current week. You can start a new one by selecting a store below.';
+        this.timesheet = null;
+        this.error = '';
         this.loading = false;
       }
     });
   }
   
   loadTimesheet(id: string): void {
+    console.log(`Loading timesheet with ID: ${id}`);
     this.hoursService.getTimesheet(id).subscribe({
       next: (timesheet) => {
+        console.log('Timesheet loaded successfully:', timesheet._id);
         this.timesheet = timesheet;
         this.setupDaysArray();
         this.calculateWeekDayDates(timesheet.week_start_date);
         this.timesheetNotes = timesheet.notes || '';
+        
+        // Ensure store name is populated
+        if (!timesheet.store_name && timesheet.store_id) {
+          const store = this.stores.find(s => s._id === timesheet.store_id);
+          if (store) {
+            timesheet.store_name = store.name;
+          }
+        }
+        
         this.loading = false;
       },
       error: (err) => {
-        console.error('Error loading timesheet:', err);
-        this.error = ErrorHandlingService.getErrorMessage(err);
+        // Handle 404 case specifically
+        if (err.status === 404) {
+          console.error(`Timesheet with ID ${id} not found`);
+          this.noTimesheetMessage = 'The requested timesheet could not be found.';
+          this.timesheet = null;
+          this.error = '';
+        } else {
+          console.error('Error loading timesheet:', err);
+          this.error = ErrorHandlingService.getErrorMessage(err);
+        }
         this.loading = false;
       }
     });
@@ -123,17 +183,31 @@ export class TimesheetDetailComponent implements OnInit {
   setupDaysArray(): void {
     if (!this.timesheet) return;
     
+    // Use TimesheetUtils to make sure the timesheet is complete
+    // This will handle missing daily_hours and other fields
+    this.timesheet = TimesheetUtils.ensureComplete(this.timesheet);
+    
     this.days = this.weekDays.map(day => ({
       key: day,
       name: this.formatDayName(day),
-      hours: this.timesheet?.daily_hours[day as keyof typeof this.timesheet.daily_hours] || 0,
+      hours: TimesheetUtils.getDayHours(this.timesheet, day),
       isEditing: false
     }));
   }
   
   calculateWeekDayDates(startDateStr: string): void {
-    const startDate = new Date(startDateStr);
-    this.weekDayDates = DateTimeUtils.getWeekDays(startDate);
+    try {
+      const startDate = new Date(startDateStr);
+      if (isNaN(startDate.getTime())) {
+        console.error(`Invalid start date: ${startDateStr}`);
+        this.weekDayDates = [];
+        return;
+      }
+      this.weekDayDates = DateTimeUtils.getWeekDays(startDate);
+    } catch (error) {
+      console.error(`Error calculating week days: ${error}`);
+      this.weekDayDates = [];
+    }
   }
   
   get canEditTimesheet(): boolean {
@@ -157,10 +231,20 @@ export class TimesheetDetailComponent implements OnInit {
     
     this.hoursService.startNewTimesheet(this.selectedStoreId).subscribe({
       next: (timesheet) => {
+        console.log(`New timesheet created with ID: ${timesheet._id}`);
         this.timesheet = timesheet;
         this.setupDaysArray();
         this.calculateWeekDayDates(timesheet.week_start_date);
         this.timesheetNotes = timesheet.notes || '';
+        
+        // Ensure store name is populated
+        if (!timesheet.store_name && timesheet.store_id) {
+          const store = this.stores.find(s => s._id === timesheet.store_id);
+          if (store) {
+            timesheet.store_name = store.name;
+          }
+        }
+        
         this.loading = false;
       },
       error: (err) => {

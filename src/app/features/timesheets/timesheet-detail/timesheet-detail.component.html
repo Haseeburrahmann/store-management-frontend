@@ -1,270 +1,269 @@
 <div class="page-container">
-    <div class="page-header">
-      <h1 class="page-title">{{ isCurrentTimesheet ? 'Current Week Timesheet' : 'Timesheet Details' }}</h1>
-      <div class="flex flex-col sm:flex-row gap-4">
+  <div class="page-header">
+    <h1 class="page-title">{{ isCurrentTimesheet ? 'Current Week Timesheet' : 'Timesheet Details' }}</h1>
+    <div class="flex flex-col sm:flex-row gap-4">
+      <button 
+        (click)="navigateBack()" 
+        class="btn btn-outline flex items-center"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        Back
+      </button>
+    </div>
+  </div>
+  
+  <!-- Loading Indicator -->
+  <div *ngIf="loading" class="flex justify-center my-10">
+    <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+  </div>
+  
+  <!-- Error Message -->
+  <div *ngIf="error" class="alert alert-danger mb-6">
+    {{ error }}
+    <button (click)="error = ''" class="ml-2">×</button>
+  </div>
+  
+  <!-- No Timesheet View - IMPROVED HANDLING -->
+  <div *ngIf="!loading && !timesheet && !error" class="card">
+    <div class="text-center py-8">
+      <h2 class="text-xl font-medium mb-2">No Timesheet Found</h2>
+      <p class="text-[var(--text-secondary)] mb-4">
+        {{ noTimesheetMessage }}
+      </p>
+      
+      <div *ngIf="isCurrentTimesheet" class="mt-4">
+        <div class="form-group mb-4 max-w-md mx-auto">
+          <label for="storeSelect" class="form-label">Select Store</label>
+          <select 
+            id="storeSelect" 
+            [(ngModel)]="selectedStoreId"
+            class="form-control"
+            required
+          >
+            <option value="" disabled>Select a store</option>
+            <option *ngFor="let store of stores" [value]="store._id">
+              {{ store.name }}
+            </option>
+          </select>
+        </div>
+        
         <button 
-          (click)="navigateBack()" 
-          class="btn btn-outline flex items-center"
+          (click)="startNewTimesheet()"
+          class="btn btn-primary"
+          [disabled]="!selectedStoreId"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Back
+          Start New Timesheet
         </button>
       </div>
     </div>
-    
-    <!-- Loading Indicator -->
-    <div *ngIf="loading" class="flex justify-center my-10">
-      <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
-    </div>
-    
-    <!-- Error Message -->
-    <div *ngIf="error" class="alert alert-danger mb-6">
-      {{ error }}
-    </div>
-    
-    <!-- Timesheet Not Found -->
-    <div *ngIf="!loading && !timesheet && !error" class="card">
-      <div class="text-center py-8">
-        <h2 class="text-xl font-medium mb-2">No Timesheet Found</h2>
-        <p class="text-[var(--text-secondary)] mb-4">
-          {{ isCurrentTimesheet ? 
-             'You don\'t have a timesheet for the current week. Would you like to start one?' :
-             'The requested timesheet could not be found.' }}
-        </p>
+  </div>
+  
+  <!-- Timesheet Details -->
+  <ng-container *ngIf="!loading && timesheet">
+    <div class="card mb-6">
+      <div class="flex flex-col md:flex-row justify-between mb-6">
+        <div>
+          <h2 class="text-xl font-semibold">
+            Week of {{ formatDate(timesheet.week_start_date) }}
+          </h2>
+          <p class="text-[var(--text-secondary)]">
+            {{ formatDate(timesheet.week_start_date) }} to {{ formatDate(timesheet.week_end_date) }}
+          </p>
+          <p class="mt-2">
+            <span class="font-medium">Store:</span> {{ timesheet.store_name || 'Unknown Store' }}
+          </p>
+          <p>
+            <span class="font-medium">Hourly Rate:</span> ${{ (timesheet.hourly_rate || 0).toFixed(2) }}
+          </p>
+        </div>
         
-        <div *ngIf="isCurrentTimesheet" class="mt-4">
-          <div class="form-group mb-4 max-w-md mx-auto">
-            <label for="storeSelect" class="form-label">Select Store</label>
-            <select 
-              id="storeSelect" 
-              [(ngModel)]="selectedStoreId"
-              class="form-control"
-              required
+        <div class="mt-4 md:mt-0 md:text-right">
+          <div class="mb-2">
+            <span 
+              [ngClass]="{
+                'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': timesheet.status === 'approved',
+                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': timesheet.status === 'submitted',
+                'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300': timesheet.status === 'draft',
+                'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': timesheet.status === 'rejected'
+              }"
+              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
             >
-              <option value="" disabled>Select a store</option>
-              <option *ngFor="let store of stores" [value]="store._id">
-                {{ store.name }}
-              </option>
-            </select>
+              {{ timesheet.status | titlecase }}
+            </span>
           </div>
           
-          <button 
-            (click)="startNewTimesheet()"
-            class="btn btn-primary"
-            [disabled]="!selectedStoreId"
+          <div *ngIf="timesheet.submitted_at" class="text-sm text-[var(--text-secondary)]">
+            Submitted: {{ formatDateTime(timesheet.submitted_at) }}
+          </div>
+          
+          <div *ngIf="timesheet.approved_at" class="text-sm text-[var(--text-secondary)]">
+            Approved: {{ formatDateTime(timesheet.approved_at) }}
+          </div>
+        </div>
+      </div>
+      
+      <!-- Rejection Reason -->
+      <div *ngIf="timesheet.status === 'rejected' && timesheet.rejection_reason" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-4 mb-6">
+        <div class="font-medium text-red-800 dark:text-red-300">Rejection Reason:</div>
+        <div class="text-red-700 dark:text-red-300">{{ timesheet.rejection_reason }}</div>
+      </div>
+      
+      <!-- Daily Hours -->
+      <div class="mb-6">
+        <h3 class="text-lg font-medium mb-4">Daily Hours</h3>
+        
+        <div class="overflow-x-auto">
+          <table class="w-full border-collapse">
+            <thead>
+              <tr>
+                <th class="text-left p-3 bg-[var(--bg-main)] border border-[var(--border-color)]">Day</th>
+                <th class="text-left p-3 bg-[var(--bg-main)] border border-[var(--border-color)]">Date</th>
+                <th class="text-left p-3 bg-[var(--bg-main)] border border-[var(--border-color)]">Hours</th>
+                <th *ngIf="canEditTimesheet" class="text-left p-3 bg-[var(--bg-main)] border border-[var(--border-color)]">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let day of days">
+                <td class="p-3 border border-[var(--border-color)]">{{ formatDayName(day.key) }}</td>
+                <td class="p-3 border border-[var(--border-color)]">{{ getDateForDay(day.key) }}</td>
+                <td class="p-3 border border-[var(--border-color)]">
+                  <div *ngIf="!day.isEditing">
+                    {{ day.hours }} hours
+                  </div>
+                  <div *ngIf="day.isEditing" class="flex items-center">
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      max="24"
+                      class="form-control w-20"
+                      [(ngModel)]="day.hours"
+                    >
+                    <span class="ml-2">hours</span>
+                  </div>
+                </td>
+                <td *ngIf="canEditTimesheet" class="p-3 border border-[var(--border-color)]">
+                  <div *ngIf="!day.isEditing">
+                    <button 
+                      (click)="editDay(day)"
+                      class="btn btn-xs btn-outline"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                  <div *ngIf="day.isEditing" class="flex space-x-2">
+                    <button 
+                      (click)="saveDayHours(day)"
+                      class="btn btn-xs btn-primary"
+                    >
+                      Save
+                    </button>
+                    <button 
+                      (click)="cancelEdit(day)"
+                      class="btn btn-xs btn-outline"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="font-semibold">
+                <td class="p-3 border border-[var(--border-color)]" colspan="2">Total</td>
+                <td class="p-3 border border-[var(--border-color)]">{{ timesheet.total_hours || 0 }} hours</td>
+                <td *ngIf="canEditTimesheet" class="p-3 border border-[var(--border-color)]"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+      
+      <!-- Earnings Summary -->
+      <div class="bg-[var(--bg-main)] p-4 rounded-md mb-6">
+        <h3 class="text-lg font-medium mb-2">Earnings Summary</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <div class="text-sm text-[var(--text-secondary)]">Total Hours</div>
+            <div class="text-xl font-semibold">{{ timesheet.total_hours || 0 }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-[var(--text-secondary)]">Hourly Rate</div>
+            <div class="text-xl font-semibold">${{ (timesheet.hourly_rate || 0).toFixed(2) }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-[var(--text-secondary)]">Total Earnings</div>
+            <div class="text-xl font-semibold">${{ (timesheet.total_earnings || 0).toFixed(2) }}</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Notes -->
+      <div *ngIf="canEditTimesheet" class="mb-6">
+        <label for="timesheetNotes" class="form-label">Notes</label>
+        <textarea
+          id="timesheetNotes"
+          [(ngModel)]="timesheetNotes"
+          rows="3"
+          class="form-control w-full"
+          placeholder="Add any notes about this timesheet..."
+        ></textarea>
+        
+        <div class="mt-2 flex justify-end">
+          <button
+            (click)="updateNotes()"
+            class="btn btn-sm btn-outline"
+            [disabled]="timesheetNotes === timesheet.notes"
           >
-            Start New Timesheet
+            Update Notes
+          </button>
+        </div>
+      </div>
+      
+      <div *ngIf="timesheet.notes && !canEditTimesheet" class="mb-6">
+        <h3 class="text-lg font-medium mb-2">Notes</h3>
+        <div class="bg-[var(--bg-main)] p-4 rounded-md">
+          {{ timesheet.notes }}
+        </div>
+      </div>
+      
+      <!-- Action Buttons -->
+      <div class="flex justify-end space-x-4">
+        <div *ngIf="timesheet.status === 'draft'">
+          <button 
+            (click)="submitTimesheet()"
+            class="btn btn-primary"
+          >
+            Submit Timesheet
+          </button>
+        </div>
+        
+        <div *ngIf="timesheet.status === 'rejected'">
+          <button 
+            (click)="submitTimesheet()"
+            class="btn btn-primary"
+          >
+            Resubmit Timesheet
+          </button>
+        </div>
+        
+        <div *ngIf="timesheet.status === 'submitted' && canApproveTimesheet">
+          <button 
+            (click)="approveTimesheet()"
+            class="btn btn-success"
+          >
+            Approve
+          </button>
+          <button 
+            (click)="showRejectDialog()"
+            class="btn btn-danger ml-2"
+          >
+            Reject
           </button>
         </div>
       </div>
     </div>
-    
-    <!-- Timesheet Details -->
-    <ng-container *ngIf="!loading && timesheet">
-      <div class="card mb-6">
-        <div class="flex flex-col md:flex-row justify-between mb-6">
-          <div>
-            <h2 class="text-xl font-semibold">
-              Week of {{ formatDate(timesheet.week_start_date) }}
-            </h2>
-            <p class="text-[var(--text-secondary)]">
-              {{ formatDate(timesheet.week_start_date) }} to {{ formatDate(timesheet.week_end_date) }}
-            </p>
-            <p class="mt-2">
-              <span class="font-medium">Store:</span> {{ timesheet.store_name }}
-            </p>
-            <p>
-              <span class="font-medium">Hourly Rate:</span> ${{ timesheet.hourly_rate.toFixed(2) }}
-            </p>
-          </div>
-          
-          <div class="mt-4 md:mt-0 md:text-right">
-            <div class="mb-2">
-              <span 
-                [ngClass]="{
-                  'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': timesheet.status === 'approved',
-                  'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': timesheet.status === 'submitted',
-                  'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300': timesheet.status === 'draft',
-                  'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': timesheet.status === 'rejected'
-                }"
-                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-              >
-                {{ timesheet.status | titlecase }}
-              </span>
-            </div>
-            
-            <div *ngIf="timesheet.submitted_at" class="text-sm text-[var(--text-secondary)]">
-              Submitted: {{ formatDateTime(timesheet.submitted_at) }}
-            </div>
-            
-            <div *ngIf="timesheet.approved_at" class="text-sm text-[var(--text-secondary)]">
-              Approved: {{ formatDateTime(timesheet.approved_at) }}
-            </div>
-          </div>
-        </div>
-        
-        <!-- Rejection Reason -->
-        <div *ngIf="timesheet.rejection_reason" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-4 mb-6">
-          <div class="font-medium text-red-800 dark:text-red-300">Rejection Reason:</div>
-          <div class="text-red-700 dark:text-red-300">{{ timesheet.rejection_reason }}</div>
-        </div>
-        
-        <!-- Daily Hours -->
-        <div class="mb-6">
-          <h3 class="text-lg font-medium mb-4">Daily Hours</h3>
-          
-          <div class="overflow-x-auto">
-            <table class="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th class="text-left p-3 bg-[var(--bg-main)] border border-[var(--border-color)]">Day</th>
-                  <th class="text-left p-3 bg-[var(--bg-main)] border border-[var(--border-color)]">Date</th>
-                  <th class="text-left p-3 bg-[var(--bg-main)] border border-[var(--border-color)]">Hours</th>
-                  <th *ngIf="canEditTimesheet" class="text-left p-3 bg-[var(--bg-main)] border border-[var(--border-color)]">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let day of days">
-                  <td class="p-3 border border-[var(--border-color)]">{{ formatDayName(day.key) }}</td>
-                  <td class="p-3 border border-[var(--border-color)]">{{ getDateForDay(day.key) }}</td>
-                  <td class="p-3 border border-[var(--border-color)]">
-                    <div *ngIf="!day.isEditing">
-                      {{ day.hours }} hours
-                    </div>
-                    <div *ngIf="day.isEditing" class="flex items-center">
-                      <input
-                        type="number"
-                        step="0.5"
-                        min="0"
-                        max="24"
-                        class="form-control w-20"
-                        [(ngModel)]="day.hours"
-                      >
-                      <span class="ml-2">hours</span>
-                    </div>
-                  </td>
-                  <td *ngIf="canEditTimesheet" class="p-3 border border-[var(--border-color)]">
-                    <div *ngIf="!day.isEditing">
-                      <button 
-                        (click)="editDay(day)"
-                        class="btn btn-xs btn-outline"
-                      >
-                        Edit
-                      </button>
-                    </div>
-                    <div *ngIf="day.isEditing" class="flex space-x-2">
-                      <button 
-                        (click)="saveDayHours(day)"
-                        class="btn btn-xs btn-primary"
-                      >
-                        Save
-                      </button>
-                      <button 
-                        (click)="cancelEdit(day)"
-                        class="btn btn-xs btn-outline"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-              <tfoot>
-                <tr class="font-semibold">
-                  <td class="p-3 border border-[var(--border-color)]" colspan="2">Total</td>
-                  <td class="p-3 border border-[var(--border-color)]">{{ timesheet.total_hours }} hours</td>
-                  <td *ngIf="canEditTimesheet" class="p-3 border border-[var(--border-color)]"></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-        
-        <!-- Earnings Summary -->
-        <div class="bg-[var(--bg-main)] p-4 rounded-md mb-6">
-          <h3 class="text-lg font-medium mb-2">Earnings Summary</h3>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <div class="text-sm text-[var(--text-secondary)]">Total Hours</div>
-              <div class="text-xl font-semibold">{{ timesheet.total_hours }}</div>
-            </div>
-            <div>
-              <div class="text-sm text-[var(--text-secondary)]">Hourly Rate</div>
-              <div class="text-xl font-semibold">${{ timesheet.hourly_rate.toFixed(2) }}</div>
-            </div>
-            <div>
-              <div class="text-sm text-[var(--text-secondary)]">Total Earnings</div>
-              <div class="text-xl font-semibold">${{ timesheet.total_earnings.toFixed(2) }}</div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Notes -->
-        <div *ngIf="canEditTimesheet" class="mb-6">
-          <label for="timesheetNotes" class="form-label">Notes</label>
-          <textarea
-            id="timesheetNotes"
-            [(ngModel)]="timesheetNotes"
-            rows="3"
-            class="form-control w-full"
-            placeholder="Add any notes about this timesheet..."
-          ></textarea>
-          
-          <div class="mt-2 flex justify-end">
-            <button
-              (click)="updateNotes()"
-              class="btn btn-sm btn-outline"
-              [disabled]="timesheetNotes === timesheet.notes"
-            >
-              Update Notes
-            </button>
-          </div>
-        </div>
-        
-        <div *ngIf="timesheet.notes && !canEditTimesheet" class="mb-6">
-          <h3 class="text-lg font-medium mb-2">Notes</h3>
-          <div class="bg-[var(--bg-main)] p-4 rounded-md">
-            {{ timesheet.notes }}
-          </div>
-        </div>
-        
-        <!-- Action Buttons -->
-        <div class="flex justify-end space-x-4">
-          <div *ngIf="timesheet.status === 'draft'">
-            <button 
-              (click)="submitTimesheet()"
-              class="btn btn-primary"
-            >
-              Submit Timesheet
-            </button>
-          </div>
-          
-          <div *ngIf="timesheet.status === 'rejected'">
-            <button 
-              (click)="submitTimesheet()"
-              class="btn btn-primary"
-            >
-              Resubmit Timesheet
-            </button>
-          </div>
-          
-          <div *ngIf="timesheet.status === 'submitted' && canApproveTimesheet">
-            <button 
-              (click)="approveTimesheet()"
-              class="btn btn-success"
-            >
-              Approve
-            </button>
-            <button 
-              (click)="showRejectDialog()"
-              class="btn btn-danger ml-2"
-            >
-              Reject
-            </button>
-          </div>
-        </div>
-      </div>
-    </ng-container>
-  </div>
+  </ng-container>
+</div>

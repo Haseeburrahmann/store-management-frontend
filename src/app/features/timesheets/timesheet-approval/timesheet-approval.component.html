@@ -1,270 +1,277 @@
+<!-- src/app/features/timesheets/timesheet-approval/timesheet-approval.component.html -->
 <div class="page-container">
-    <div class="page-header">
-      <h1 class="page-title">Timesheet Approval</h1>
-      <div class="flex flex-col sm:flex-row gap-4">
-        <button routerLink="/timesheets" class="btn btn-outline flex items-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Back to Timesheets
-        </button>
+  <div class="page-header">
+    <h1 class="page-title">Timesheet Approval</h1>
+    <div class="flex flex-col sm:flex-row gap-4">
+      <button routerLink="/timesheets" class="btn btn-outline flex items-center">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        Back to Timesheets
+      </button>
+    </div>
+  </div>
+  
+  <!-- Error Message -->
+  <div *ngIf="error" class="alert alert-danger mb-6">
+    {{ error }}
+    <button (click)="error = ''" class="ml-2">×</button>
+  </div>
+  
+  <!-- Filter Controls -->
+  <div class="card mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="form-group">
+        <label for="employeeFilter" class="form-label">Employee</label>
+        <select 
+          id="employeeFilter" 
+          [(ngModel)]="employeeFilter" 
+          (change)="loadTimesheets()"
+          class="form-control"
+        >
+          <option value="">All Employees</option>
+          <option *ngFor="let employee of employees" [value]="employee._id">
+            {{ employee.full_name }}
+          </option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label for="storeFilter" class="form-label">Store</label>
+        <select 
+          id="storeFilter" 
+          [(ngModel)]="storeFilter" 
+          (change)="loadTimesheets()"
+          class="form-control"
+        >
+          <option value="">All Stores</option>
+          <option *ngFor="let store of stores" [value]="store._id">
+            {{ store.name }}
+          </option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label for="dateRangeFilter" class="form-label">Date Range</label>
+        <select 
+          id="dateRangeFilter" 
+          [(ngModel)]="dateRangeFilter" 
+          (change)="applyDateRangeFilter()"
+          class="form-control"
+        >
+          <option value="past-month">Past Month</option>
+          <option value="past-3-months">Past 3 Months</option>
+          <option value="past-6-months">Past 6 Months</option>
+          <option value="past-year">Past Year</option>
+          <option value="custom">Custom Range</option>
+        </select>
       </div>
     </div>
     
-    <!-- Filter Controls -->
-    <div class="card mb-6">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="form-group">
-          <label for="employeeFilter" class="form-label">Employee</label>
-          <select 
-            id="employeeFilter" 
-            [(ngModel)]="employeeFilter" 
-            (change)="loadTimesheets()"
-            class="form-control"
-          >
-            <option value="">All Employees</option>
-            <option *ngFor="let employee of employees" [value]="employee._id">
-              {{ employee.full_name }}
-            </option>
-          </select>
+    <!-- Custom Date Range -->
+    <div *ngIf="dateRangeFilter === 'custom'" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+      <div class="form-group">
+        <label for="startDate" class="form-label">Start Date</label>
+        <input 
+          type="date" 
+          id="startDate" 
+          [(ngModel)]="startDate" 
+          (change)="loadTimesheets()"
+          class="form-control"
+        >
+      </div>
+      
+      <div class="form-group">
+        <label for="endDate" class="form-label">End Date</label>
+        <input 
+          type="date" 
+          id="endDate" 
+          [(ngModel)]="endDate" 
+          (change)="loadTimesheets()"
+          class="form-control"
+        >
+      </div>
+    </div>
+  </div>
+  
+  <!-- Loading Indicator -->
+  <div *ngIf="loading" class="flex justify-center my-10">
+    <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+  </div>
+  
+  <!-- Pending Timesheets Section -->
+  <div class="card mb-6">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-lg font-semibold">Pending Approval</h2>
+      <span class="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 px-2.5 py-0.5 rounded-full text-xs font-medium">
+        {{ pendingTimesheets.length }} Pending
+      </span>
+    </div>
+    
+    <!-- Empty state -->
+    <div *ngIf="!loading && (!pendingTimesheets || pendingTimesheets.length === 0)" class="text-center py-8 text-[var(--text-secondary)]">
+      No timesheets pending approval.
+    </div>
+    
+    <!-- Pending timesheets list -->
+    <div *ngIf="!loading && pendingTimesheets && pendingTimesheets.length > 0" class="space-y-4">
+      <div *ngFor="let timesheet of pendingTimesheets; trackBy: trackByTimesheetId" class="border rounded-lg overflow-hidden bg-[var(--bg-card)]">
+        <div class="border-b border-[var(--border-color)] px-4 py-3 flex justify-between items-center">
+          <div>
+            <h3 class="font-medium">{{ timesheet.employee_name || 'Unknown Employee' }}</h3>
+            <p class="text-sm text-[var(--text-secondary)]">
+              Week of {{ formatDate(timesheet.week_start_date) }}
+            </p>
+          </div>
+          <div>
+            <span class="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium">
+              Submitted: {{ formatDateShort(timesheet.submitted_at) }}
+            </span>
+          </div>
         </div>
         
-        <div class="form-group">
-          <label for="storeFilter" class="form-label">Store</label>
-          <select 
-            id="storeFilter" 
-            [(ngModel)]="storeFilter" 
-            (change)="loadTimesheets()"
-            class="form-control"
-          >
-            <option value="">All Stores</option>
-            <option *ngFor="let store of stores" [value]="store._id">
-              {{ store.name }}
-            </option>
-          </select>
+        <div class="px-4 py-3">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <div class="text-sm text-[var(--text-secondary)]">Store</div>
+              <div>{{ timesheet.store_name || 'Unknown Store' }}</div>
+            </div>
+            <div>
+              <div class="text-sm text-[var(--text-secondary)]">Total Hours</div>
+              <div>{{ timesheet.total_hours || 0 }} hours</div>
+            </div>
+            <div>
+              <div class="text-sm text-[var(--text-secondary)]">Total Earnings</div>
+              <div>${{ (timesheet.total_earnings || 0).toFixed(2) }}</div>
+            </div>
+          </div>
         </div>
         
-        <div class="form-group">
-          <label for="dateRangeFilter" class="form-label">Date Range</label>
-          <select 
-            id="dateRangeFilter" 
-            [(ngModel)]="dateRangeFilter" 
-            (change)="applyDateRangeFilter()"
-            class="form-control"
-          >
-            <option value="past-month">Past Month</option>
-            <option value="past-3-months">Past 3 Months</option>
-            <option value="past-6-months">Past 6 Months</option>
-            <option value="past-year">Past Year</option>
-            <option value="custom">Custom Range</option>
-          </select>
-        </div>
-      </div>
-      
-      <!-- Custom Date Range -->
-      <div *ngIf="dateRangeFilter === 'custom'" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-        <div class="form-group">
-          <label for="startDate" class="form-label">Start Date</label>
-          <input 
-            type="date" 
-            id="startDate" 
-            [(ngModel)]="startDate" 
-            (change)="loadTimesheets()"
-            class="form-control"
-          >
-        </div>
-        
-        <div class="form-group">
-          <label for="endDate" class="form-label">End Date</label>
-          <input 
-            type="date" 
-            id="endDate" 
-            [(ngModel)]="endDate" 
-            (change)="loadTimesheets()"
-            class="form-control"
-          >
-        </div>
-      </div>
-    </div>
-    
-    <!-- Loading Indicator -->
-    <div *ngIf="loading" class="flex justify-center my-10">
-      <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
-    </div>
-    
-    <!-- Pending Timesheets Section -->
-    <div class="card mb-6">
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="text-lg font-semibold">Pending Approval</h2>
-        <span class="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 px-2.5 py-0.5 rounded-full text-xs font-medium">
-          {{ pendingTimesheets.length }} Pending
-        </span>
-      </div>
-      
-      <!-- Empty state -->
-      <div *ngIf="!loading && (!pendingTimesheets || pendingTimesheets.length === 0)" class="text-center py-8 text-[var(--text-secondary)]">
-        No timesheets pending approval.
-      </div>
-      
-      <!-- Pending timesheets list -->
-      <div *ngIf="!loading && pendingTimesheets && pendingTimesheets.length > 0" class="space-y-4">
-        <div *ngFor="let timesheet of pendingTimesheets; trackBy: trackByTimesheetId" class="border rounded-lg overflow-hidden bg-[var(--bg-card)]">
-          <div class="border-b border-[var(--border-color)] px-4 py-3 flex justify-between items-center">
-            <div>
-              <h3 class="font-medium">{{ timesheet.employee_name }}</h3>
-              <p class="text-sm text-[var(--text-secondary)]">
-                Week of {{ formatDate(timesheet.week_start_date) }}
-              </p>
-            </div>
-            <div>
-              <span class="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium">
-                Submitted: {{ formatDateShort(timesheet.submitted_at) }}
-              </span>
-            </div>
-          </div>
-          
-          <div class="px-4 py-3">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <div class="text-sm text-[var(--text-secondary)]">Store</div>
-                <div>{{ timesheet.store_name }}</div>
-              </div>
-              <div>
-                <div class="text-sm text-[var(--text-secondary)]">Total Hours</div>
-                <div>{{ timesheet.total_hours }} hours</div>
-              </div>
-              <div>
-                <div class="text-sm text-[var(--text-secondary)]">Total Earnings</div>
-                <div>${{ timesheet.total_earnings.toFixed(2) }}</div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="bg-[var(--bg-main)] px-4 py-3 border-t border-[var(--border-color)]">
-            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-              <a 
-                [routerLink]="['/timesheets', timesheet._id]" 
-                class="btn btn-sm btn-outline"
-              >
-                View Details
-              </a>
-              
-              <div class="flex gap-2">
-                <button 
-                  (click)="approveTimesheet(timesheet._id || '')"
-                  class="btn btn-sm btn-success"
-                  [disabled]="!timesheet._id"
-                >
-                  Approve
-                </button>
-                <button 
-                  (click)="rejectTimesheet(timesheet._id || '')"
-                  class="btn btn-sm btn-danger"
-                  [disabled]="!timesheet._id"
-                >
-                  Reject
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Recently Processed Timesheets -->
-    <div class="card">
-      <h2 class="text-lg font-semibold mb-4">Recently Processed</h2>
-      
-      <!-- Empty state -->
-      <div *ngIf="!loading && (!processedTimesheets || processedTimesheets.length === 0)" class="text-center py-8 text-[var(--text-secondary)]">
-        No recently processed timesheets found.
-      </div>
-      
-      <!-- Processed timesheets list -->
-      <div *ngIf="!loading && processedTimesheets && processedTimesheets.length > 0" class="space-y-4">
-        <div *ngFor="let timesheet of processedTimesheets; trackBy: trackByTimesheetId" class="border rounded-lg overflow-hidden bg-[var(--bg-card)]">
-          <div class="border-b border-[var(--border-color)] px-4 py-3 flex justify-between items-center">
-            <div>
-              <h3 class="font-medium">{{ timesheet.employee_name }}</h3>
-              <p class="text-sm text-[var(--text-secondary)]">
-                Week of {{ formatDate(timesheet.week_start_date) }}
-              </p>
-            </div>
-            <div>
-              <span 
-                [ngClass]="{
-                  'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': timesheet.status === 'approved',
-                  'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': timesheet.status === 'rejected'
-                }"
-                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-              >
-                {{ timesheet.status | titlecase }}: {{ formatDateShort(timesheet.approved_at) }}
-              </span>
-            </div>
-          </div>
-          
-          <div class="px-4 py-3">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <div class="text-sm text-[var(--text-secondary)]">Store</div>
-                <div>{{ timesheet.store_name }}</div>
-              </div>
-              <div>
-                <div class="text-sm text-[var(--text-secondary)]">Total Hours</div>
-                <div>{{ timesheet.total_hours }} hours</div>
-              </div>
-              <div>
-                <div class="text-sm text-[var(--text-secondary)]">Total Earnings</div>
-                <div>${{ timesheet.total_earnings.toFixed(2) }}</div>
-              </div>
-            </div>
+        <div class="bg-[var(--bg-main)] px-4 py-3 border-t border-[var(--border-color)]">
+          <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+            <a 
+              [routerLink]="['/timesheets', timesheet._id]" 
+              class="btn btn-sm btn-outline"
+            >
+              View Details
+            </a>
             
-            <!-- If rejected, show reason -->
-            <div *ngIf="timesheet.status === 'rejected' && timesheet.rejection_reason" class="mt-2 p-2 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200 rounded-md text-sm">
-              <span class="font-medium">Rejected: </span>{{ timesheet.rejection_reason }}
-            </div>
-          </div>
-          
-          <div class="bg-[var(--bg-main)] px-4 py-3 border-t border-[var(--border-color)]">
-            <div class="flex justify-end">
-              <a 
-                [routerLink]="['/timesheets', timesheet._id]" 
-                class="btn btn-sm btn-outline"
+            <div class="flex gap-2">
+              <button 
+                (click)="approveTimesheet(timesheet._id || '')"
+                class="btn btn-sm btn-success"
+                [disabled]="!timesheet._id"
               >
-                View Details
-              </a>
+                Approve
+              </button>
+              <button 
+                (click)="rejectTimesheet(timesheet._id || '')"
+                class="btn btn-sm btn-danger"
+                [disabled]="!timesheet._id"
+              >
+                Reject
+              </button>
             </div>
           </div>
-        </div>
-      </div>
-      
-      <!-- Pagination controls -->
-      <div *ngIf="!loading && processedTimesheets && processedTimesheets.length > 0" class="flex justify-between items-center mt-6">
-        <div>
-          <span class="text-sm text-[var(--text-secondary)]">
-            Showing {{ processedTimesheets.length }} recently processed timesheets
-          </span>
-        </div>
-        
-        <div class="flex space-x-2">
-          <button 
-            (click)="previousPage()" 
-            class="btn btn-sm btn-outline"
-            [disabled]="currentPage === 1"
-          >
-            Previous
-          </button>
-          <span class="flex items-center px-3">
-            Page {{ currentPage }}
-          </span>
-          <button 
-            (click)="nextPage()" 
-            class="btn btn-sm btn-outline"
-            [disabled]="processedTimesheets.length < pageSize"
-          >
-            Next
-          </button>
         </div>
       </div>
     </div>
   </div>
+  
+  <!-- Recently Processed Timesheets -->
+  <div class="card">
+    <h2 class="text-lg font-semibold mb-4">Recently Processed</h2>
+    
+    <!-- Empty state -->
+    <div *ngIf="!loading && (!processedTimesheets || processedTimesheets.length === 0)" class="text-center py-8 text-[var(--text-secondary)]">
+      No recently processed timesheets found.
+    </div>
+    
+    <!-- Processed timesheets list -->
+    <div *ngIf="!loading && processedTimesheets && processedTimesheets.length > 0" class="space-y-4">
+      <div *ngFor="let timesheet of processedTimesheets; trackBy: trackByTimesheetId" class="border rounded-lg overflow-hidden bg-[var(--bg-card)]">
+        <div class="border-b border-[var(--border-color)] px-4 py-3 flex justify-between items-center">
+          <div>
+            <h3 class="font-medium">{{ timesheet.employee_name || 'Unknown Employee' }}</h3>
+            <p class="text-sm text-[var(--text-secondary)]">
+              Week of {{ formatDate(timesheet.week_start_date) }}
+            </p>
+          </div>
+          <div>
+            <span 
+              [ngClass]="{
+                'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': timesheet.status === 'approved',
+                'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': timesheet.status === 'rejected'
+              }"
+              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+            >
+              {{ timesheet.status | titlecase }}: {{ formatDateShort(timesheet.approved_at) }}
+            </span>
+          </div>
+        </div>
+        
+        <div class="px-4 py-3">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <div class="text-sm text-[var(--text-secondary)]">Store</div>
+              <div>{{ timesheet.store_name || 'Unknown Store' }}</div>
+            </div>
+            <div>
+              <div class="text-sm text-[var(--text-secondary)]">Total Hours</div>
+              <div>{{ timesheet.total_hours || 0 }} hours</div>
+            </div>
+            <div>
+              <div class="text-sm text-[var(--text-secondary)]">Total Earnings</div>
+              <div>${{ (timesheet.total_earnings || 0).toFixed(2) }}</div>
+            </div>
+          </div>
+          
+          <!-- If rejected, show reason -->
+          <div *ngIf="timesheet.status === 'rejected' && timesheet.rejection_reason" class="mt-2 p-2 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200 rounded-md text-sm">
+            <span class="font-medium">Rejected: </span>{{ timesheet.rejection_reason }}
+          </div>
+        </div>
+        
+        <div class="bg-[var(--bg-main)] px-4 py-3 border-t border-[var(--border-color)]">
+          <div class="flex justify-end">
+            <a 
+              [routerLink]="['/timesheets', timesheet._id]" 
+              class="btn btn-sm btn-outline"
+            >
+              View Details
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Pagination controls -->
+    <div *ngIf="!loading && processedTimesheets && processedTimesheets.length > 0" class="flex justify-between items-center mt-6">
+      <div>
+        <span class="text-sm text-[var(--text-secondary)]">
+          Showing {{ processedTimesheets.length }} recently processed timesheets
+        </span>
+      </div>
+      
+      <div class="flex space-x-2">
+        <button 
+          (click)="previousPage()" 
+          class="btn btn-sm btn-outline"
+          [disabled]="currentPage === 1"
+        >
+          Previous
+        </button>
+        <span class="flex items-center px-3">
+          Page {{ currentPage }}
+        </span>
+        <button 
+          (click)="nextPage()" 
+          class="btn btn-sm btn-outline"
+          [disabled]="processedTimesheets.length < pageSize"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

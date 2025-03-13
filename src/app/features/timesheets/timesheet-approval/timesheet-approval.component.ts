@@ -1,33 +1,29 @@
 // src/app/features/timesheets/timesheet-approval/timesheet-approval.component.ts
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink, Router } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { HoursService } from '../../../core/services/hours.service';
 import { StoreService } from '../../../core/services/store.service';
 import { EmployeeService } from '../../../core/services/employee.service';
-import { WeeklyTimesheet } from '../../../shared/models/hours.model';
+import { DateTimeUtils } from '../../../core/utils/date-time-utils.service';
+import { WeeklyTimesheet, TimesheetUtils } from '../../../shared/models/hours.model';
 import { Store } from '../../../shared/models/store.model';
 import { Employee } from '../../../shared/models/employee.model';
-import { DateTimeUtils } from '../../../core/utils/date-time-utils.service';
 
 @Component({
   selector: 'app-timesheet-approval',
   standalone: true,
   imports: [CommonModule, RouterLink, FormsModule],
-  templateUrl:'./timesheet-approval.component.html'
-   
+  templateUrl: './timesheet-approval.component.html'
 })
 export class TimesheetApprovalComponent implements OnInit {
   loading = true;
+  error = '';
+  
+  // Timesheets
   pendingTimesheets: WeeklyTimesheet[] = [];
   processedTimesheets: WeeklyTimesheet[] = [];
-  stores: Store[] = [];
-  employees: Employee[] = [];
-  
-  // Pagination
-  currentPage = 1;
-  pageSize = 5;
   
   // Filters
   employeeFilter = '';
@@ -36,29 +32,25 @@ export class TimesheetApprovalComponent implements OnInit {
   startDate = '';
   endDate = '';
   
+  // Pagination
+  currentPage = 1;
+  pageSize = 5;
+  
+  // Data for filters
+  employees: Employee[] = [];
+  stores: Store[] = [];
+  
   constructor(
     private hoursService: HoursService,
     private storeService: StoreService,
-    private employeeService: EmployeeService,
-    private router: Router
+    private employeeService: EmployeeService
   ) {}
   
   ngOnInit(): void {
-    this.loadStores();
     this.loadEmployees();
+    this.loadStores();
     this.applyDateRangeFilter(); // Sets default date range
     this.loadTimesheets();
-  }
-  
-  loadStores(): void {
-    this.storeService.getStores().subscribe({
-      next: (stores) => {
-        this.stores = stores;
-      },
-      error: (err) => {
-        console.error('Error loading stores:', err);
-      }
-    });
   }
   
   loadEmployees(): void {
@@ -68,101 +60,116 @@ export class TimesheetApprovalComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error loading employees:', err);
+        this.error = 'Failed to load employees. Please try again later.';
+      }
+    });
+  }
+  
+  loadStores(): void {
+    this.storeService.getStores().subscribe({
+      next: (stores) => {
+        this.stores = stores;
+      },
+      error: (err) => {
+        console.error('Error loading stores:', err);
+        this.error = 'Failed to load stores. Please try again later.';
       }
     });
   }
   
   loadTimesheets(): void {
     this.loading = true;
+    this.error = '';
     
-    // Common filter options
-    const filterOptions: any = {};
+    // Create filter options
+    const options: any = {};
     
     if (this.employeeFilter) {
-      filterOptions.employee_id = this.employeeFilter;
+      options.employee_id = this.employeeFilter;
     }
     
     if (this.storeFilter) {
-      filterOptions.store_id = this.storeFilter;
+      options.store_id = this.storeFilter;
     }
     
     if (this.startDate) {
-      filterOptions.start_date = this.startDate;
+      options.start_date = this.startDate;
     }
     
     if (this.endDate) {
-      filterOptions.end_date = this.endDate;
+      options.end_date = this.endDate;
     }
     
-    // Load pending timesheets (status = 'submitted')
-    const pendingOptions = { 
-      ...filterOptions,
-      status: 'submitted',
-      limit: 100 // Get all pending timesheets
-    };
-    
-    this.hoursService.getTimesheets(pendingOptions).subscribe({
+    // First load pending timesheets (status = submitted)
+    this.hoursService.getTimesheets({
+      ...options,
+      status: 'submitted'
+    }).subscribe({
       next: (timesheets) => {
-        this.pendingTimesheets = timesheets;
+        this.pendingTimesheets = timesheets.map(timesheet => this.enrichTimesheet(timesheet));
+        console.log(`Loaded ${this.pendingTimesheets.length} pending timesheets`);
         
-        // Now load processed timesheets (approved or rejected)
-        this.loadProcessedTimesheets(filterOptions);
+        // Then load processed timesheets (status = approved or rejected)
+        // with pagination
+        this.loadProcessedTimesheets(options);
       },
       error: (err) => {
         console.error('Error loading pending timesheets:', err);
+        this.error = 'Failed to load pending timesheets. Please try again later.';
         this.loading = false;
-        // Still try to load processed timesheets
-        this.loadProcessedTimesheets(filterOptions);
       }
     });
   }
   
-  loadProcessedTimesheets(filterOptions: any): void {
-    // For processed timesheets, get both approved and rejected
-    // We'll handle pagination here
-    const processedOptions = {
-      ...filterOptions,
+  loadProcessedTimesheets(options: any): void {
+    // Add pagination to options
+    const paginatedOptions = {
+      ...options,
       skip: (this.currentPage - 1) * this.pageSize,
       limit: this.pageSize
     };
     
-    // First try approved timesheets
+    // Create a combined status query for approved OR rejected
+    // The API should support this format: status=approved,rejected
     this.hoursService.getTimesheets({
-      ...processedOptions,
-      status: 'approved'
+      ...paginatedOptions,
+      status: 'approved,rejected'
     }).subscribe({
-      next: (approvedTimesheets) => {
-        // Then get rejected timesheets
-        this.hoursService.getTimesheets({
-          ...processedOptions,
-          status: 'rejected'
-        }).subscribe({
-          next: (rejectedTimesheets) => {
-            // Combine and sort by approved_at date (newest first)
-            this.processedTimesheets = [...approvedTimesheets, ...rejectedTimesheets]
-              .sort((a, b) => {
-                const dateA = a.approved_at ? new Date(a.approved_at).getTime() : 0;
-                const dateB = b.approved_at ? new Date(b.approved_at).getTime() : 0;
-                return dateB - dateA;
-              })
-              .slice(0, this.pageSize); // Only take pageSize items
-            
-            this.loading = false;
-          },
-          error: (err) => {
-            console.error('Error loading rejected timesheets:', err);
-            // Just use approved timesheets
-            this.processedTimesheets = approvedTimesheets;
-            this.loading = false;
-          }
-        });
+      next: (timesheets) => {
+        this.processedTimesheets = timesheets.map(timesheet => this.enrichTimesheet(timesheet));
+        console.log(`Loaded ${this.processedTimesheets.length} processed timesheets`);
+        this.loading = false;
       },
       error: (err) => {
-        console.error('Error loading approved timesheets:', err);
-        this.processedTimesheets = [];
+        console.error('Error loading processed timesheets:', err);
+        this.error = 'Failed to load processed timesheets. Please try again later.';
         this.loading = false;
       }
     });
+  }
+  
+  // Helper method to add missing fields to timesheet objects
+  enrichTimesheet(timesheet: WeeklyTimesheet): WeeklyTimesheet {
+    // Ensure we have a complete timesheet with all required fields
+    const enriched = TimesheetUtils.ensureComplete(timesheet);
+    
+    // Add store name if missing
+    if (!enriched.store_name && enriched.store_id) {
+      const store = this.stores.find(s => s._id === enriched.store_id);
+      if (store) {
+        enriched.store_name = store.name;
+      }
+    }
+    
+    // Add employee name if missing
+    if (!enriched.employee_name && enriched.employee_id) {
+      const employee = this.employees.find(e => e._id === enriched.employee_id);
+      if (employee) {
+        enriched.employee_name = employee.full_name;
+      }
+    }
+    
+    return enriched;
   }
   
   applyDateRangeFilter(): void {
@@ -198,47 +205,59 @@ export class TimesheetApprovalComponent implements OnInit {
     this.startDate = DateTimeUtils.formatDateForAPI(startDate);
     this.endDate = DateTimeUtils.formatDateForAPI(endDate);
     
+    // Reset to first page when filter changes
+    this.currentPage = 1;
     this.loadTimesheets();
   }
   
-  approveTimesheet(timesheetId: string): void {
-    if (!timesheetId) return;
+  approveTimesheet(id: string): void {
+    if (!id) return;
     
     this.loading = true;
     
-    this.hoursService.approveTimesheet(timesheetId).subscribe({
-      next: (updatedTimesheet) => {
+    this.hoursService.approveTimesheet(id).subscribe({
+      next: (timesheet) => {
         // Remove from pending and add to processed
-        this.pendingTimesheets = this.pendingTimesheets.filter(t => t._id !== timesheetId);
-        this.processedTimesheets = [updatedTimesheet, ...this.processedTimesheets.slice(0, this.pageSize - 1)];
+        this.pendingTimesheets = this.pendingTimesheets.filter(t => t._id !== id);
+        
+        // Only add to processed if it fits our current filter criteria
+        if (this.processedTimesheets.length < this.pageSize) {
+          this.processedTimesheets = [timesheet, ...this.processedTimesheets].slice(0, this.pageSize);
+        }
+        
         this.loading = false;
       },
       error: (err) => {
         console.error('Error approving timesheet:', err);
-        alert('Error approving timesheet: ' + err.message);
+        this.error = 'Failed to approve timesheet. Please try again later.';
         this.loading = false;
       }
     });
   }
   
-  rejectTimesheet(timesheetId: string): void {
-    if (!timesheetId) return;
+  rejectTimesheet(id: string): void {
+    if (!id) return;
     
     const reason = prompt('Please enter a reason for rejecting this timesheet:');
-    if (!reason) return; // Cancelled
+    if (!reason) return; // User cancelled
     
     this.loading = true;
     
-    this.hoursService.rejectTimesheet(timesheetId, reason).subscribe({
-      next: (updatedTimesheet) => {
+    this.hoursService.rejectTimesheet(id, reason).subscribe({
+      next: (timesheet) => {
         // Remove from pending and add to processed
-        this.pendingTimesheets = this.pendingTimesheets.filter(t => t._id !== timesheetId);
-        this.processedTimesheets = [updatedTimesheet, ...this.processedTimesheets.slice(0, this.pageSize - 1)];
+        this.pendingTimesheets = this.pendingTimesheets.filter(t => t._id !== id);
+        
+        // Only add to processed if it fits our current filter criteria
+        if (this.processedTimesheets.length < this.pageSize) {
+          this.processedTimesheets = [timesheet, ...this.processedTimesheets].slice(0, this.pageSize);
+        }
+        
         this.loading = false;
       },
       error: (err) => {
         console.error('Error rejecting timesheet:', err);
-        alert('Error rejecting timesheet: ' + err.message);
+        this.error = 'Failed to reject timesheet. Please try again later.';
         this.loading = false;
       }
     });
@@ -262,14 +281,17 @@ export class TimesheetApprovalComponent implements OnInit {
     return timesheet._id || `timesheet-${index}`;
   }
   
+  // Date formatting methods
   formatDate(dateStr: string): string {
     return DateTimeUtils.formatDateForDisplay(dateStr);
   }
   
-  formatDateShort(dateStr?: string): string {
-    if (!dateStr) return '';
-    return DateTimeUtils.formatDateForDisplay(dateStr, { 
-      month: 'short', 
+  // Add the missing formatDateShort method
+  formatDateShort(dateStr?: string | null): string {
+    if (!dateStr) return 'Unknown';
+    
+    return DateTimeUtils.formatDateForDisplay(dateStr, {
+      month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
