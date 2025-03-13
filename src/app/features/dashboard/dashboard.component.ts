@@ -3,11 +3,15 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { PermissionService } from '../../core/auth/permission.service';
 import { StoreStatsWidgetComponent } from './widgets/store-stats-widget/store-stats-widget.component';
 import { EmployeeStatsWidgetComponent } from "./widgets/employee-stats-widget/employee-stats-widget.component";
 import { TimesheetStatsWidgetComponent } from "./widgets/timesheet-stats-widget/timesheet-stats-widget.component";
 import { ScheduleStatsWidgetComponent } from "./widgets/schedule-stats-widget/schedule-stats-widget.component";
 import { PendingApprovalsWidgetComponent } from "./widgets/pending-approvals-widget/pending-approvals-widget.component";
+import { AdminStatsWidgetComponent } from "./widgets/admin-stats-widget/admin-stats-widget.component";
+import { RecentActivityWidgetComponent } from "./widgets/recent-activity-widget/recent-activity-widget.component";
+import { SalesStatsWidgetComponent } from "./widgets/sales-stats-widget/sales-stats-widget.component";
 
 @Component({
   selector: 'app-dashboard',
@@ -19,111 +23,93 @@ import { PendingApprovalsWidgetComponent } from "./widgets/pending-approvals-wid
     EmployeeStatsWidgetComponent, 
     TimesheetStatsWidgetComponent,
     ScheduleStatsWidgetComponent,
-    PendingApprovalsWidgetComponent
+    PendingApprovalsWidgetComponent,
+    AdminStatsWidgetComponent,
+    RecentActivityWidgetComponent,
+    SalesStatsWidgetComponent
   ],
   template: `
     <div class="container mx-auto">
       <!-- Welcome section -->
       <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-6">
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Welcome back, Admin!</h1>
-        <p class="text-slate-600 dark:text-slate-300 mt-1">Here's what's happening in your stores today.</p>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Welcome back, {{ displayName }}!</h1>
+        <p class="text-slate-600 dark:text-slate-300 mt-1">{{ welcomeMessage }}</p>
       </div>
       
-      <!-- Stats cards -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-        <!-- Active Employees -->
-        <app-employee-stats-widget></app-employee-stats-widget>
+      <!-- Admin Dashboard View -->
+      <ng-container *ngIf="isAdmin || isManager">
+        <!-- Admin Stats cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+          <!-- Admin Overview -->
+          <app-admin-stats-widget class="lg:col-span-2"></app-admin-stats-widget>
+          
+          <!-- Active Stores -->
+          <app-store-stats-widget></app-store-stats-widget>
+          
+          <!-- Active Employees -->
+          <app-employee-stats-widget></app-employee-stats-widget>
+        </div>
         
-        <!-- Active Stores -->
-        <app-store-stats-widget></app-store-stats-widget>
-        
-        <!-- Timesheet Status -->
-        <app-timesheet-stats-widget></app-timesheet-stats-widget>
-        
-        <!-- Schedule Status -->
-        <app-schedule-stats-widget></app-schedule-stats-widget>
-        
-        <!-- Pending Approvals -->
-        <app-pending-approvals-widget class="lg:col-span-4"></app-pending-approvals-widget>
-      </div>
+        <!-- Key Performance Indicators & Approvals -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <!-- Pending Approvals -->
+          <app-pending-approvals-widget></app-pending-approvals-widget>
+          
+          <!-- Sales Overview -->
+          <app-sales-stats-widget></app-sales-stats-widget>
+        </div>
+      </ng-container>
       
-      <!-- Recent Activity -->
-      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden mb-6">
-        <div class="px-6 py-5 border-b border-slate-200 dark:border-slate-700">
-          <h3 class="text-lg font-medium leading-6 text-slate-900 dark:text-white">Recent Activity</h3>
-        </div>
-        <ul class="divide-y divide-slate-200 dark:divide-slate-700">
-          <!-- Activity Item 1 -->
-          <li>
-            <div class="px-6 py-4">
-              <div class="flex items-center justify-between">
-                <div class="min-w-0 flex-1">
-                  <p class="text-sm font-medium text-slate-900 dark:text-white truncate">
-                    Jane Smith clocked in
-                  </p>
-                  <p class="text-sm text-slate-500 dark:text-slate-400">
-                    Today at 8:03 AM • Downtown Store
-                  </p>
-                </div>
-                <div>
-                  <div class="ml-4 flex-shrink-0 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-1">
-                    On time
-                  </div>
-                </div>
-              </div>
-            </div>
-          </li>
+      <!-- Employee Dashboard View -->
+      <ng-container *ngIf="!isAdmin && !isManager">
+        <!-- Stats cards for employees -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mb-6">
+          <!-- Timesheet Status -->
+          <app-timesheet-stats-widget></app-timesheet-stats-widget>
           
-          <!-- Activity Item 2 -->
-          <li>
-            <div class="px-6 py-4">
-              <div class="flex items-center justify-between">
-                <div class="min-w-0 flex-1">
-                  <p class="text-sm font-medium text-slate-900 dark:text-white truncate">
-                    John Doe submitted timesheet for approval
-                  </p>
-                  <p class="text-sm text-slate-500 dark:text-slate-400">
-                    Yesterday at 5:15 PM • Total hours: 8.5
-                  </p>
-                </div>
-                <div>
-                  <div class="ml-4 flex-shrink-0 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 px-2 py-1">
-                    Pending
-                  </div>
-                </div>
-              </div>
-            </div>
-          </li>
-          
-          <!-- Activity Item 3 -->
-          <li>
-            <div class="px-6 py-4">
-              <div class="flex items-center">
-                <div class="min-w-0 flex-1">
-                  <p class="text-sm font-medium text-slate-900 dark:text-white truncate">
-                    Robert Johnson was assigned to Eastside Store
-                  </p>
-                  <p class="text-sm text-slate-500 dark:text-slate-400">
-                    Mar 6, 2025 at 2:23 PM
-                  </p>
-                </div>
-              </div>
-            </div>
-          </li>
-        </ul>
-        <div class="bg-slate-50 dark:bg-slate-700 px-6 py-3">
-          <div class="text-sm">
-            <a routerLink="/activity" class="font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">View all activity</a>
-          </div>
+          <!-- Schedule Status -->
+          <app-schedule-stats-widget></app-schedule-stats-widget>
         </div>
-      </div>
+        
+        <!-- Task overview and pending items -->
+        <div class="grid grid-cols-1 gap-6 mb-6">
+          <!-- Pending Approvals or Tasks -->
+          <app-pending-approvals-widget></app-pending-approvals-widget>
+        </div>
+      </ng-container>
+      
+      <!-- Recent Activity - Visible to All -->
+      <app-recent-activity-widget></app-recent-activity-widget>
     </div>
   `
 })
 export class DashboardComponent implements OnInit {
-  constructor(private authService: AuthService) {}
+  isAdmin = false;
+  isManager = false;
+  
+  get displayName(): string {
+    const user = this.authService.currentUser;
+    return user?.full_name || 'User';
+  }
+  
+  get welcomeMessage(): string {
+    if (this.isAdmin) {
+      return "Here's what's happening across all stores today.";
+    } else if (this.isManager) {
+      return "Here's what's happening in your stores today.";
+    } else {
+      return "Here's your overview for today.";
+    }
+  }
+  
+  constructor(
+    private authService: AuthService,
+    private permissionService: PermissionService
+  ) {}
   
   ngOnInit(): void {
-    // Load dashboard data
+    // Determine user role
+    this.isAdmin = this.permissionService.isAdmin();
+    this.isManager = this.permissionService.isManager();
   }
 }

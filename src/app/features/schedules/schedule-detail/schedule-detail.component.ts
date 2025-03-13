@@ -264,14 +264,14 @@ export class ScheduleDetailComponent implements OnInit {
   scheduleId = '';
   schedule: Schedule | null = null;
   fullSchedule: Schedule | null = null; // Store the full schedule for admin view
-  
+
   dailySchedules: DaySchedule[] = [];
   employeeShifts: { id: string, name: string, shifts: ScheduleShift[] }[] = [];
-  
+
   // User info
   currentEmployeeId: string | null = null;
   userRole: 'admin' | 'manager' | 'employee' | 'unknown' = 'unknown';
-  
+
   constructor(
     private hoursService: HoursService,
     private storeService: StoreService,
@@ -284,7 +284,7 @@ export class ScheduleDetailComponent implements OnInit {
     // Determine user role
     this.userRole = this.permissionService.getRoleIdentifier();
   }
-  
+
   ngOnInit(): void {
     this.scheduleId = this.route.snapshot.paramMap.get('id') || '';
     if (!this.scheduleId) {
@@ -292,11 +292,11 @@ export class ScheduleDetailComponent implements OnInit {
       this.loading = false;
       return;
     }
-    
+
     // Get the current user's ID and employee ID
     const currentUser = this.authService.currentUser;
     console.log(`Current logged in user: ${currentUser?.email}, ID: ${currentUser?._id}`);
-    
+
     // For employees and managers, we need their employee ID for filtering
     this.hoursService.getCurrentEmployeeId().subscribe(employeeId => {
       this.currentEmployeeId = employeeId;
@@ -304,10 +304,11 @@ export class ScheduleDetailComponent implements OnInit {
       this.loadSchedule();
     });
   }
-  
+
   /**
-   * Improved loadSchedule method with enhanced admin view
-   */
+  * This function correctly handles the role-based visibility of schedules and shifts.
+  * It ensures that admins see all shifts, while employees only see their own.
+  */
   loadSchedule(): void {
     if (!this.scheduleId) {
       console.error('No schedule ID provided');
@@ -315,29 +316,29 @@ export class ScheduleDetailComponent implements OnInit {
       this.loading = false;
       return;
     }
-    
+
     console.log(`Loading schedule with ID: ${this.scheduleId}, for employee ID: ${this.currentEmployeeId}`);
-    
-    // Always load the full schedule first, regardless of user role
+
+    // Always load the full schedule
     this.hoursService.getSchedule(this.scheduleId).subscribe({
       next: (fullSchedule) => {
         console.log(`Got full schedule with ${fullSchedule.shifts?.length || 0} shifts`);
-        
-        // Store the full schedule
+
+        // Store the full schedule - important for admin view
         this.fullSchedule = fullSchedule;
-        
-        // For employee role, filter the shifts
+
+        // For employee role, filter the shifts to only show their own
         if (this.userRole === 'employee' && this.currentEmployeeId) {
           const employeeIdStr = String(this.currentEmployeeId);
-          
+
           console.log(`Filtering shifts for employee ID: ${employeeIdStr}`);
-          
-          const matchingShifts = fullSchedule.shifts.filter(shift => 
+
+          const matchingShifts = fullSchedule.shifts.filter(shift =>
             String(shift.employee_id) === employeeIdStr
           );
-          
+
           console.log(`Found ${matchingShifts.length} matching shifts for employee`);
-          
+
           if (matchingShifts.length > 0) {
             // Create a new schedule object with just this employee's shifts
             this.schedule = {
@@ -352,10 +353,10 @@ export class ScheduleDetailComponent implements OnInit {
             };
           }
         } else {
-          // For admin and manager, show the full schedule
+          // For admin and manager, show the full schedule with all shifts
           this.schedule = fullSchedule;
         }
-        
+
         this.organizeDailySchedules();
         this.organizeEmployeeShifts();
         this.loading = false;
@@ -367,33 +368,33 @@ export class ScheduleDetailComponent implements OnInit {
       }
     });
   }
-  
+
   /**
    * Navigate to previous week's schedule - NEW FEATURE
    */
   navigateToPreviousWeek(): void {
     if (!this.schedule || !this.schedule.week_start_date) return;
-    
+
     const currentWeekStart = new Date(this.schedule.week_start_date);
     const previousWeekStart = new Date(currentWeekStart);
     previousWeekStart.setDate(currentWeekStart.getDate() - 7);
-    
+
     this.findAndNavigateToWeek(previousWeekStart);
   }
-  
+
   /**
    * Navigate to next week's schedule - NEW FEATURE
    */
   navigateToNextWeek(): void {
     if (!this.schedule || !this.schedule.week_start_date) return;
-    
+
     const currentWeekStart = new Date(this.schedule.week_start_date);
     const nextWeekStart = new Date(currentWeekStart);
     nextWeekStart.setDate(currentWeekStart.getDate() + 7);
-    
+
     this.findAndNavigateToWeek(nextWeekStart);
   }
-  
+
   /**
    * Find a schedule for a specific week and navigate to it - NEW FEATURE
    */
@@ -401,9 +402,9 @@ export class ScheduleDetailComponent implements OnInit {
     // Format date for API
     const startDate = DateTimeUtils.formatDateForAPI(weekStart);
     const endDate = DateTimeUtils.formatDateForAPI(new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000));
-    
+
     this.loading = true;
-    
+
     // Check if a schedule exists for the target week
     this.hoursService.getSchedules({
       start_date: startDate,
@@ -430,30 +431,30 @@ export class ScheduleDetailComponent implements OnInit {
 
   organizeDailySchedules(): void {
     if (!this.schedule) return;
-    
+
     // Get week start date
     const startDate = new Date(this.schedule.week_start_date);
-    
+
     // Create an array of days for the week
     this.dailySchedules = [];
-    
+
     // Days of the week
     const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-    
+
     // Create daily schedule objects
     for (let i = 0; i < 7; i++) {
       const dayDate = new Date(startDate);
       dayDate.setDate(startDate.getDate() + i);
-      
+
       const day = days[i];
       const dayName = this.getDayName(day);
-      
+
       // Get shifts for this day 
       // Admin sees all shifts, employee sees filtered shifts
-      const dayShifts = this.getVisibleShifts().filter(shift => 
+      const dayShifts = this.getVisibleShifts().filter(shift =>
         shift.day_of_week.toLowerCase() === day
       );
-      
+
       this.dailySchedules.push({
         day,
         dayName,
@@ -462,31 +463,34 @@ export class ScheduleDetailComponent implements OnInit {
       });
     }
   }
-  
+
+  /**
+ * Organize employee shifts to correctly display data for both admin and employee views
+ */
   organizeEmployeeShifts(): void {
     if (!this.schedule) return;
-    
+
     // For admin view, use the full schedule shifts to ensure all employees are shown
-    const shiftsToOrganize = this.userRole === 'admin' ? 
+    const shiftsToOrganize = this.userRole === 'admin' || this.userRole === 'manager' ?
       (this.fullSchedule?.shifts || []) : this.getVisibleShifts();
-    
+
     // Group shifts by employee
-    const employeeMap = new Map<string, { 
-      id: string, 
-      name: string, 
-      shifts: ScheduleShift[] 
+    const employeeMap = new Map<string, {
+      id: string,
+      name: string,
+      shifts: ScheduleShift[]
     }>();
-    
+
     // Process shifts and group by employee
     shiftsToOrganize.forEach(shift => {
       if (!shift.employee_id) return; // Skip shifts without employee ID
-      
+
       const employeeId = String(shift.employee_id);
-      
+
       if (!employeeMap.has(employeeId)) {
         // Get employee name from shift or use default
         let employeeName = shift.employee_name || 'Unknown Employee';
-        
+
         // If this is the current employee, try to get name from auth service
         if (this.isCurrentEmployee(employeeId)) {
           const currentUser = this.authService.currentUser;
@@ -494,7 +498,7 @@ export class ScheduleDetailComponent implements OnInit {
             employeeName = currentUser.full_name || currentUser.email;
           }
         }
-        
+
         // Initialize employee entry in the map
         employeeMap.set(employeeId, {
           id: employeeId,
@@ -502,26 +506,26 @@ export class ScheduleDetailComponent implements OnInit {
           shifts: []
         });
       }
-      
+
       // Add shift to the employee's shifts array
       const employeeEntry = employeeMap.get(employeeId);
       if (employeeEntry) {
         employeeEntry.shifts.push(shift);
       }
     });
-    
+
     // Convert map to array and sort by employee name
     this.employeeShifts = Array.from(employeeMap.values())
       .sort((a, b) => a.name.localeCompare(b.name));
   }
-  
+
   deleteSchedule(): void {
     if (!this.scheduleId || !confirm('Are you sure you want to delete this schedule? This action cannot be undone.')) {
       return;
     }
-    
+
     this.loading = true;
-    
+
     this.hoursService.deleteSchedule(this.scheduleId).subscribe({
       next: (result) => {
         if (result) {
@@ -538,11 +542,11 @@ export class ScheduleDetailComponent implements OnInit {
       }
     });
   }
-  
+
   printSchedule(): void {
     window.print();
   }
-  
+
   navigateBack(): void {
     // Use window.history to go back if possible
     if (window.history.length > 1) {
@@ -552,115 +556,115 @@ export class ScheduleDetailComponent implements OnInit {
       this.router.navigate(['/schedules']);
     }
   }
-  
+
   calculateShiftHours(shift: ScheduleShift): number {
     const startMinutes = DateTimeUtils.timeToMinutes(shift.start_time);
     const endMinutes = DateTimeUtils.timeToMinutes(shift.end_time);
-    
+
     // Handle overnight shifts
     let duration = endMinutes - startMinutes;
     if (duration < 0) {
       duration += 24 * 60; // Add 24 hours in minutes
     }
-    
+
     return Math.round(duration / 60 * 10) / 10; // Round to 1 decimal place
   }
-  
+
   calculateTotalHours(shifts: ScheduleShift[]): number {
     return shifts.reduce((total, shift) => total + this.calculateShiftHours(shift), 0);
   }
-  
+
   /**
-   * Get the total shift count - Fixed for Admin View
-   */
+ * Get the total shift count properly for both admin and employee views
+ */
   getTotalShiftCount(): number {
-    if (this.userRole === 'admin' && this.fullSchedule) {
-      // Admin should see count of all shifts
-      return this.fullSchedule.shifts?.length || 0;
+    if (this.userRole === 'admin' || this.userRole === 'manager') {
+      // Admin and manager should see count of all shifts
+      return this.fullSchedule?.shifts?.length || 0;
     } else {
-      // Others see only their visible shifts
+      // Employees see only their visible shifts count
       return this.getVisibleShifts().length || 0;
     }
   }
-  
+
   // Helper methods
   getDayName(day: string): string {
     return day.charAt(0).toUpperCase() + day.slice(1);
   }
-  
+
   formatDate(dateStr: string): string {
     return DateTimeUtils.formatDateForDisplay(dateStr);
   }
-  
+
   formatDayDate(date: Date): string {
     return DateTimeUtils.formatDateForDisplay(date.toISOString());
   }
-  
+
   formatDateWithTime(dateStr?: string): string {
     if (!dateStr) return '';
-    return DateTimeUtils.formatDateForDisplay(dateStr, { 
-      year: 'numeric', 
+    return DateTimeUtils.formatDateForDisplay(dateStr, {
+      year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
     });
   }
-  
+
   formatShiftTime(timeStr: string): string {
     const [hours, minutes] = timeStr.split(':').map(Number);
     const date = new Date();
     date.setHours(hours, minutes, 0, 0);
     return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
-  
+
   /**
-   * Returns shifts based on user role - Enhanced for Admin View
-   */
+ * Returns shifts based on user role - Enhanced for Admin View
+ */
   getVisibleShifts(): ScheduleShift[] {
     if (!this.schedule || !this.schedule.shifts || !Array.isArray(this.schedule.shifts)) {
       return [];
     }
-    
+
     console.log(`Filtering shifts for role: ${this.userRole}, schedule has ${this.schedule.shifts.length} total shifts`);
-    
+
     // For admins and managers, show all shifts
     if (this.userRole === 'admin' || this.userRole === 'manager') {
       console.log(`Admin/Manager: Showing all ${this.schedule.shifts.length} shifts`);
       return this.schedule.shifts;
     }
-    
+
     // For employees, only show their own shifts
     if (this.userRole === 'employee' && this.currentEmployeeId) {
       const employeeIdStr = String(this.currentEmployeeId);
       console.log(`Employee: filtering shifts for employee ID: ${employeeIdStr}`);
-      
+
       // Filter shifts by employee ID
       const filteredShifts = this.schedule.shifts.filter(shift => {
         if (!shift.employee_id) return false;
-        
+
         // Convert both to strings to ensure proper comparison
         const shiftEmployeeId = String(shift.employee_id);
         return shiftEmployeeId === employeeIdStr;
       });
-      
+
       console.log(`Employee view: Found ${filteredShifts.length} shifts out of ${this.schedule.shifts.length}`);
       return filteredShifts;
     }
-    
+
     // Default case - return all shifts
     return this.schedule.shifts;
   }
-  
+
   /**
-   * Improved version that uses String comparison for employee IDs
-   */
+  * Improved version that uses String comparison for employee IDs
+  */
   isCurrentEmployee(employeeId: any): boolean {
     if (!this.currentEmployeeId || !employeeId) return false;
-    
+
     const currentIdStr = String(this.currentEmployeeId);
     const shiftEmployeeIdStr = String(employeeId);
-    
+
     return currentIdStr === shiftEmployeeIdStr;
   }
 }
