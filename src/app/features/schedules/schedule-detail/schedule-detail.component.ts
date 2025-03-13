@@ -7,6 +7,7 @@ import { HoursService } from '../../../core/services/hours.service';
 import { StoreService } from '../../../core/services/store.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PermissionService } from '../../../core/auth/permission.service';
+import { EmployeeService } from '../../../core/services/employee.service';
 import { Schedule, ScheduleShift } from '../../../shared/models/hours.model';
 import { DateTimeUtils } from '../../../core/utils/date-time-utils.service';
 import { ErrorHandlingService } from '../../../core/utils/error-handling.service';
@@ -18,6 +19,7 @@ interface DaySchedule {
   date: Date;
   shifts: ScheduleShift[];
 }
+
 interface EmployeeShiftResponse extends ScheduleShift {
   schedule_id?: string;
   schedule_title?: string;
@@ -43,6 +45,31 @@ interface EmployeeShiftResponse extends ScheduleShift {
             </svg>
             Back
           </button>
+          
+          <!-- Week Navigation Controls - NEW FEATURE -->
+          <div class="flex gap-2">
+            <button 
+              (click)="navigateToPreviousWeek()" 
+              class="btn btn-outline flex items-center"
+              *ngIf="scheduleId"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+              Previous Week
+            </button>
+            
+            <button 
+              (click)="navigateToNextWeek()" 
+              class="btn btn-outline flex items-center"
+              *ngIf="scheduleId"
+            >
+              Next Week
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
           
           <div *appHasPermission="'hours:write'" class="flex gap-2">
             <a 
@@ -89,11 +116,10 @@ interface EmployeeShiftResponse extends ScheduleShift {
             <div>{{ formatDateWithTime(schedule.created_at) }}</div>
             
             <div class="mt-2">
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-  {{ userRole === 'admin' || userRole === 'manager' ? 
-     (fullSchedule?.shifts?.length || 0) : 
-     getVisibleShifts().length }} Shifts
-</span>
+              <!-- Fixed Admin View - Now correctly shows total shift count -->
+              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                {{ getTotalShiftCount() }} Shifts
+              </span>
             </div>
           </div>
         </div>
@@ -117,26 +143,27 @@ interface EmployeeShiftResponse extends ScheduleShift {
                   {{ formatDayDate(day.date) }}
                 </td>
                 <td class="py-3 px-4 border border-[var(--border-color)] align-top">
-                <div *ngIf="day.shifts.length === 0" class="text-[var(--text-secondary)] italic">
-  No shifts scheduled{{ userRole === 'employee' ? ' for you' : '' }}
-</div>
+                  <div *ngIf="day.shifts.length === 0" class="text-[var(--text-secondary)] italic">
+                    <!-- Show appropriate message based on role -->
+                    {{ userRole === 'employee' ? 'No shifts scheduled for you' : 'No shifts scheduled' }}
+                  </div>
                   
-<div *ngFor="let shift of day.shifts" class="mb-2 p-2 bg-[var(--bg-main)] rounded">
-    <div class="flex justify-between">
-      <div class="font-medium">
-        <!-- Show proper employee name with (You) indicator -->
-        {{ shift.employee_name || (isCurrentEmployee(shift.employee_id) ? authService.currentUser?.full_name || 'Current Employee' : 'Unknown Employee') }}
-        <span *ngIf="isCurrentEmployee(shift.employee_id)" 
-            class="ml-1 text-xs text-green-600 dark:text-green-400">
-        (You)
-        </span>
-      </div>
-      <div>{{ formatShiftTime(shift.start_time) }} - {{ formatShiftTime(shift.end_time) }}</div>
-    </div>
-    <div *ngIf="shift.notes" class="mt-1 text-sm text-[var(--text-secondary)] italic">
-      {{ shift.notes }}
-    </div>
-  </div>
+                  <div *ngFor="let shift of day.shifts" class="mb-2 p-2 bg-[var(--bg-main)] rounded">
+                    <div class="flex justify-between">
+                      <div class="font-medium">
+                        <!-- Show proper employee name with (You) indicator -->
+                        {{ shift.employee_name || (isCurrentEmployee(shift.employee_id) ? authService.currentUser?.full_name || 'Current Employee' : 'Unknown Employee') }}
+                        <span *ngIf="isCurrentEmployee(shift.employee_id)" 
+                            class="ml-1 text-xs text-green-600 dark:text-green-400">
+                          (You)
+                        </span>
+                      </div>
+                      <div>{{ formatShiftTime(shift.start_time) }} - {{ formatShiftTime(shift.end_time) }}</div>
+                    </div>
+                    <div *ngIf="shift.notes" class="mt-1 text-sm text-[var(--text-secondary)] italic">
+                      {{ shift.notes }}
+                    </div>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -157,11 +184,28 @@ interface EmployeeShiftResponse extends ScheduleShift {
         </div>
       </div>
       
-      <!-- Employee Schedule View -->
+      <!-- Empty Schedule Message - NEW FEATURE -->
+      <div *ngIf="!loading && schedule && schedule.shifts && schedule.shifts.length === 0" class="card mb-6">
+        <div class="text-center py-8">
+          <h2 class="text-xl font-medium mb-2">No Shifts Scheduled</h2>
+          <p class="text-[var(--text-secondary)] mb-4">
+            This schedule doesn't have any shifts yet.
+          </p>
+          <a 
+            *appHasPermission="'hours:write'"
+            [routerLink]="['/schedules', scheduleId, 'edit']" 
+            class="btn btn-primary"
+          >
+            Add Shifts
+          </a>
+        </div>
+      </div>
+      
+      <!-- Employee Schedule View - IMPROVED FOR ADMIN VISIBILITY -->
       <div *ngIf="!loading && schedule && employeeShifts.length > 0" class="card">
-      <h2 class="text-lg font-semibold mb-4">
-  {{ userRole === 'employee' ? 'Your Schedule Summary' : 'Employee Schedule Summary' }}
-</h2>
+        <h2 class="text-lg font-semibold mb-4">
+          {{ userRole === 'employee' ? 'Your Schedule Summary' : 'Employee Schedule Summary' }}
+        </h2>
         
         <div class="space-y-4">
           <div *ngFor="let employee of employeeShifts" class="border rounded-lg overflow-hidden">
@@ -194,6 +238,23 @@ interface EmployeeShiftResponse extends ScheduleShift {
           </div>
         </div>
       </div>
+      
+      <!-- No Schedule Found -->
+      <div *ngIf="!loading && !schedule && !error" class="card">
+        <div class="text-center py-8">
+          <h2 class="text-xl font-medium mb-2">Schedule Not Found</h2>
+          <p class="text-[var(--text-secondary)] mb-4">
+            The requested schedule could not be found.
+          </p>
+          
+          <a 
+            routerLink="/schedules" 
+            class="btn btn-primary"
+          >
+            View All Schedules
+          </a>
+        </div>
+      </div>
     </div>
   `
 })
@@ -202,7 +263,7 @@ export class ScheduleDetailComponent implements OnInit {
   error = '';
   scheduleId = '';
   schedule: Schedule | null = null;
-  fullSchedule: Schedule | null = null;
+  fullSchedule: Schedule | null = null; // Store the full schedule for admin view
   
   dailySchedules: DaySchedule[] = [];
   employeeShifts: { id: string, name: string, shifts: ScheduleShift[] }[] = [];
@@ -216,6 +277,7 @@ export class ScheduleDetailComponent implements OnInit {
     private storeService: StoreService,
     public authService: AuthService,
     private permissionService: PermissionService,
+    private employeeService: EmployeeService,
     private route: ActivatedRoute,
     private router: Router
   ) {
@@ -244,7 +306,7 @@ export class ScheduleDetailComponent implements OnInit {
   }
   
   /**
-   * Improved loadSchedule method for employee role with employee name handling
+   * Improved loadSchedule method with enhanced admin view
    */
   loadSchedule(): void {
     if (!this.scheduleId) {
@@ -256,109 +318,114 @@ export class ScheduleDetailComponent implements OnInit {
     
     console.log(`Loading schedule with ID: ${this.scheduleId}, for employee ID: ${this.currentEmployeeId}`);
     
-    if (this.userRole === 'employee') {
-      console.log('Employee role detected, fetching employee-specific shifts');
-      
-      // For employees, use the schedule endpoint first to get the complete schedule
-      this.hoursService.getSchedule(this.scheduleId).subscribe({
-        next: (fullSchedule) => {
-          console.log(`Got full schedule with ${fullSchedule.shifts?.length || 0} shifts`);
+    // Always load the full schedule first, regardless of user role
+    this.hoursService.getSchedule(this.scheduleId).subscribe({
+      next: (fullSchedule) => {
+        console.log(`Got full schedule with ${fullSchedule.shifts?.length || 0} shifts`);
+        
+        // Store the full schedule
+        this.fullSchedule = fullSchedule;
+        
+        // For employee role, filter the shifts
+        if (this.userRole === 'employee' && this.currentEmployeeId) {
+          const employeeIdStr = String(this.currentEmployeeId);
           
-          // Store the full schedule
-          this.fullSchedule = fullSchedule;
+          console.log(`Filtering shifts for employee ID: ${employeeIdStr}`);
           
-          // Filter for this employee's shifts
-          if (this.currentEmployeeId) {
-            const employeeIdStr = String(this.currentEmployeeId);
-            
-            console.log(`Filtering shifts for employee ID: ${employeeIdStr}`);
-            
-            const matchingShifts = fullSchedule.shifts.filter(shift => 
-              String(shift.employee_id) === employeeIdStr
-            );
-            
-            console.log(`Found ${matchingShifts.length} matching shifts for employee`);
-            
-            if (matchingShifts.length > 0) {
-              // Create a new schedule object with just this employee's shifts
-              this.schedule = {
-                ...fullSchedule,
-                shifts: matchingShifts
-              };
-            } else {
-              // If no matching shifts, still show the schedule but with empty shifts
-              this.schedule = {
-                ...fullSchedule,
-                shifts: []
-              };
-              this.error = 'No shifts scheduled for you in this week';
-            }
+          const matchingShifts = fullSchedule.shifts.filter(shift => 
+            String(shift.employee_id) === employeeIdStr
+          );
+          
+          console.log(`Found ${matchingShifts.length} matching shifts for employee`);
+          
+          if (matchingShifts.length > 0) {
+            // Create a new schedule object with just this employee's shifts
+            this.schedule = {
+              ...fullSchedule,
+              shifts: matchingShifts
+            };
           } else {
-            // If no employee ID, show the whole schedule
-            this.schedule = fullSchedule;
+            // If no matching shifts, still show the schedule but with empty shifts
+            this.schedule = {
+              ...fullSchedule,
+              shifts: []
+            };
           }
-          
-          this.organizeDailySchedules();
-          this.organizeEmployeeShifts();
-          this.loading = false;
-        },
-        error: (err) => {
-          console.error(`Error loading schedule ID=${this.scheduleId}:`, err);
-          this.error = 'Failed to load schedule: ' + err.message;
-          this.loading = false;
+        } else {
+          // For admin and manager, show the full schedule
+          this.schedule = fullSchedule;
         }
-      });
-    } else {
-      // For admins and managers, use the regular schedule endpoint
-      this.hoursService.getSchedule(this.scheduleId).subscribe({
-        next: (schedule) => {
-          console.log(`Successfully loaded schedule: ${schedule.title} with ${schedule.shifts?.length || 0} shifts`);
-          this.schedule = schedule;
-          this.fullSchedule = { ...schedule };
-          this.organizeDailySchedules();
-          this.organizeEmployeeShifts();
-          this.loading = false;
-        },
-        error: (err) => {
-          console.error(`Error loading schedule ID=${this.scheduleId}:`, err);
-          this.error = 'Failed to load schedule: ' + err.message;
-          this.loading = false;
-        }
-      });
-    }
+        
+        this.organizeDailySchedules();
+        this.organizeEmployeeShifts();
+        this.loading = false;
+      },
+      error: (err) => {
+        console.error(`Error loading schedule ID=${this.scheduleId}:`, err);
+        this.error = 'Failed to load schedule: ' + err.message;
+        this.loading = false;
+      }
+    });
   }
   
   /**
-   * Calculate the week start date based on the days in shifts
+   * Navigate to previous week's schedule - NEW FEATURE
    */
-  calculateWeekStartDate(shifts: EmployeeShiftResponse[]): string {
-    // Get the current date
-    const today = new Date();
+  navigateToPreviousWeek(): void {
+    if (!this.schedule || !this.schedule.week_start_date) return;
     
-    // Find Monday of the current week
-    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Adjust for Monday as first day
+    const currentWeekStart = new Date(this.schedule.week_start_date);
+    const previousWeekStart = new Date(currentWeekStart);
+    previousWeekStart.setDate(currentWeekStart.getDate() - 7);
     
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - daysFromMonday);
-    monday.setHours(0, 0, 0, 0);
-    
-    return monday.toISOString().split('T')[0];
+    this.findAndNavigateToWeek(previousWeekStart);
   }
-
+  
   /**
-   * Calculate the week end date based on the days in shifts
+   * Navigate to next week's schedule - NEW FEATURE
    */
-  calculateWeekEndDate(shifts: EmployeeShiftResponse[]): string {
-    // Get start date
-    const startDate = new Date(this.calculateWeekStartDate(shifts));
+  navigateToNextWeek(): void {
+    if (!this.schedule || !this.schedule.week_start_date) return;
     
-    // Add 6 days to get to Sunday
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 6);
-    endDate.setHours(23, 59, 59, 999);
+    const currentWeekStart = new Date(this.schedule.week_start_date);
+    const nextWeekStart = new Date(currentWeekStart);
+    nextWeekStart.setDate(currentWeekStart.getDate() + 7);
     
-    return endDate.toISOString().split('T')[0];
+    this.findAndNavigateToWeek(nextWeekStart);
+  }
+  
+  /**
+   * Find a schedule for a specific week and navigate to it - NEW FEATURE
+   */
+  findAndNavigateToWeek(weekStart: Date): void {
+    // Format date for API
+    const startDate = DateTimeUtils.formatDateForAPI(weekStart);
+    const endDate = DateTimeUtils.formatDateForAPI(new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000));
+    
+    this.loading = true;
+    
+    // Check if a schedule exists for the target week
+    this.hoursService.getSchedules({
+      start_date: startDate,
+      end_date: endDate,
+      store_id: this.schedule?.store_id,
+      limit: 1
+    }).subscribe({
+      next: (schedules) => {
+        if (schedules.length > 0) {
+          // Navigate to the found schedule
+          this.router.navigate(['/schedules', schedules[0]._id]);
+        } else {
+          this.loading = false;
+          alert(`No schedule found for the week of ${startDate}`);
+        }
+      },
+      error: (err) => {
+        console.error('Error finding schedule for week:', err);
+        this.loading = false;
+        alert('Error finding schedule: ' + err.message);
+      }
+    });
   }
 
   organizeDailySchedules(): void {
@@ -381,8 +448,9 @@ export class ScheduleDetailComponent implements OnInit {
       const day = days[i];
       const dayName = this.getDayName(day);
       
-      // Get visible shifts for this day based on user role
-      const visibleShifts = this.getVisibleShifts().filter(shift => 
+      // Get shifts for this day 
+      // Admin sees all shifts, employee sees filtered shifts
+      const dayShifts = this.getVisibleShifts().filter(shift => 
         shift.day_of_week.toLowerCase() === day
       );
       
@@ -390,7 +458,7 @@ export class ScheduleDetailComponent implements OnInit {
         day,
         dayName,
         date: dayDate,
-        shifts: visibleShifts
+        shifts: dayShifts
       });
     }
   }
@@ -398,8 +466,9 @@ export class ScheduleDetailComponent implements OnInit {
   organizeEmployeeShifts(): void {
     if (!this.schedule) return;
     
-    // Get only visible shifts based on user role
-    const visibleShifts = this.getVisibleShifts();
+    // For admin view, use the full schedule shifts to ensure all employees are shown
+    const shiftsToOrganize = this.userRole === 'admin' ? 
+      (this.fullSchedule?.shifts || []) : this.getVisibleShifts();
     
     // Group shifts by employee
     const employeeMap = new Map<string, { 
@@ -409,7 +478,7 @@ export class ScheduleDetailComponent implements OnInit {
     }>();
     
     // Process shifts and group by employee
-    visibleShifts.forEach(shift => {
+    shiftsToOrganize.forEach(shift => {
       if (!shift.employee_id) return; // Skip shifts without employee ID
       
       const employeeId = String(shift.employee_id);
@@ -444,9 +513,6 @@ export class ScheduleDetailComponent implements OnInit {
     // Convert map to array and sort by employee name
     this.employeeShifts = Array.from(employeeMap.values())
       .sort((a, b) => a.name.localeCompare(b.name));
-    
-    // Log for debugging
-    console.log(`Organized ${visibleShifts.length} shifts into ${this.employeeShifts.length} employee summaries`);
   }
   
   deleteSchedule(): void {
@@ -504,6 +570,19 @@ export class ScheduleDetailComponent implements OnInit {
     return shifts.reduce((total, shift) => total + this.calculateShiftHours(shift), 0);
   }
   
+  /**
+   * Get the total shift count - Fixed for Admin View
+   */
+  getTotalShiftCount(): number {
+    if (this.userRole === 'admin' && this.fullSchedule) {
+      // Admin should see count of all shifts
+      return this.fullSchedule.shifts?.length || 0;
+    } else {
+      // Others see only their visible shifts
+      return this.getVisibleShifts().length || 0;
+    }
+  }
+  
   // Helper methods
   getDayName(day: string): string {
     return day.charAt(0).toUpperCase() + day.slice(1);
@@ -536,8 +615,7 @@ export class ScheduleDetailComponent implements OnInit {
   }
   
   /**
-   * Returns only the shifts that should be visible to the current user
-   * based on their role
+   * Returns shifts based on user role - Enhanced for Admin View
    */
   getVisibleShifts(): ScheduleShift[] {
     if (!this.schedule || !this.schedule.shifts || !Array.isArray(this.schedule.shifts)) {
@@ -546,15 +624,9 @@ export class ScheduleDetailComponent implements OnInit {
     
     console.log(`Filtering shifts for role: ${this.userRole}, schedule has ${this.schedule.shifts.length} total shifts`);
     
-    // For admins, show all shifts
-    if (this.userRole === 'admin') {
-      console.log(`Admin: Showing all ${this.schedule.shifts.length} shifts`);
-      return this.schedule.shifts;
-    }
-    
-    // For managers, show all shifts for stores they manage
-    if (this.userRole === 'manager') {
-      console.log(`Manager: Showing all ${this.schedule.shifts.length} shifts for this store`);
+    // For admins and managers, show all shifts
+    if (this.userRole === 'admin' || this.userRole === 'manager') {
+      console.log(`Admin/Manager: Showing all ${this.schedule.shifts.length} shifts`);
       return this.schedule.shifts;
     }
     
@@ -563,25 +635,13 @@ export class ScheduleDetailComponent implements OnInit {
       const employeeIdStr = String(this.currentEmployeeId);
       console.log(`Employee: filtering shifts for employee ID: ${employeeIdStr}`);
       
-      // Get current user to debug the issue
-      const currentUser = this.authService.currentUser;
-      console.log(`Current logged in user email: ${currentUser?.email}`);
-      
       // Filter shifts by employee ID
       const filteredShifts = this.schedule.shifts.filter(shift => {
         if (!shift.employee_id) return false;
         
         // Convert both to strings to ensure proper comparison
         const shiftEmployeeId = String(shift.employee_id);
-        
-        console.log(`Comparing: shift employee ID ${shiftEmployeeId} with current employee ID ${employeeIdStr}`);
-        const matches = shiftEmployeeId === employeeIdStr;
-        
-        if (matches) {
-          console.log(`Found matching shift for day: ${shift.day_of_week}`);
-        }
-        
-        return matches;
+        return shiftEmployeeId === employeeIdStr;
       });
       
       console.log(`Employee view: Found ${filteredShifts.length} shifts out of ${this.schedule.shifts.length}`);
@@ -600,9 +660,6 @@ export class ScheduleDetailComponent implements OnInit {
     
     const currentIdStr = String(this.currentEmployeeId);
     const shiftEmployeeIdStr = String(employeeId);
-    
-    // For debugging
-    console.log(`Comparing employee IDs: current=${currentIdStr}, shift=${shiftEmployeeIdStr}`);
     
     return currentIdStr === shiftEmployeeIdStr;
   }

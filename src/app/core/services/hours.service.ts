@@ -3,7 +3,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, of, throwError, forkJoin } from 'rxjs';
 import { catchError, tap, map, switchMap } from 'rxjs/operators';
-import { WeeklyTimesheet, Schedule, ScheduleShift } from '../../shared/models/hours.model';
+import { WeeklyTimesheet, Schedule, ScheduleShift, TimesheetUtils } from '../../shared/models/hours.model';
 import { EmployeeService } from './employee.service';
 import { StoreService } from './store.service';
 import { AuthService } from '../auth/auth.service';
@@ -38,76 +38,103 @@ export class HoursService {
   
   // ======== Timesheet Methods ========
   
-  /**
-   * Get timesheets with optional filtering
-   */
-  getTimesheets(options: {
-    employee_id?: string,
-    store_id?: string,
-    start_date?: string,
-    end_date?: string,
-    status?: string,
-    skip?: number,
-    limit?: number
-  } = {}): Observable<WeeklyTimesheet[]> {
-    // Special handling for admin users trying to view their own timesheet
-    if (options.employee_id && this.isAdminUser() && 
-        options.employee_id === this.authService.currentUser?._id) {
-      console.log('Admin user trying to view personal timesheets. Returning empty array.');
-      return of([]); // Return empty array for admin users
-    }
-    
-    // Create safe params for API request
-    const safeParams = IdUtils.createIdParams(options);
-    let params = new HttpParams();
-    
-    Object.keys(safeParams).forEach(key => {
-      params = params.set(key, safeParams[key]);
-    });
-    
-    return this.http.get<WeeklyTimesheet[]>(this.timesheetsUrl, { params }).pipe(
-      tap(timesheets => console.log(`Fetched ${timesheets.length} timesheets`)),
-      catchError(error => {
-        console.error(`Error fetching timesheets: ${error.message}`);
-        return of([]);
-      })
-    );
+ /**
+ * Enhanced getTimesheets method that enriches the response
+ * Replace your existing getTimesheets method with this
+ */
+getTimesheets(options: {
+  employee_id?: string,
+  store_id?: string,
+  start_date?: string,
+  end_date?: string,
+  status?: string,
+  skip?: number,
+  limit?: number
+} = {}): Observable<WeeklyTimesheet[]> {
+  // Special handling for admin users trying to view their own timesheet
+  if (options.employee_id && this.isAdminUser() && 
+      options.employee_id === this.authService.currentUser?._id) {
+    console.log('Admin user trying to view personal timesheets. Returning empty array.');
+    return of([]); // Return empty array for admin users
   }
   
-  /**
-   * Get current user's timesheets
-   */
-  getMyTimesheets(options: {
-    status?: string,
-    start_date?: string,
-    end_date?: string
-  } = {}): Observable<WeeklyTimesheet[]> {
-    let params = new HttpParams();
-    
-    if (options.status) params = params.set('status', options.status);
-    if (options.start_date) params = params.set('start_date', options.start_date);
-    if (options.end_date) params = params.set('end_date', options.end_date);
-    
-    return this.http.get<WeeklyTimesheet[]>(`${this.timesheetsUrl}/me`, { params }).pipe(
-      tap(timesheets => console.log(`Fetched ${timesheets.length} of my timesheets`)),
-      catchError(error => {
-        console.error(`Error fetching my timesheets: ${error.message}`);
-        return of([]);
-      })
-    );
-  }
+  // Create safe params for API request
+  const safeParams = IdUtils.createIdParams(options);
+  let params = new HttpParams();
+  
+  Object.keys(safeParams).forEach(key => {
+    params = params.set(key, safeParams[key]);
+  });
+  
+  // Log params in a way that's compatible with all Angular versions
+  const paramObj: {[key: string]: string} = {};
+  params.keys().forEach(key => {
+    paramObj[key] = params.get(key) || '';
+  });
+  console.log('Fetching timesheets with params:', paramObj);
+  
+  return this.http.get<any[]>(this.timesheetsUrl, { params }).pipe(
+    map(timesheets => this.mapTimesheetResponse(timesheets)),
+    tap(timesheets => console.log(`Fetched ${timesheets.length} timesheets`)),
+    catchError(error => {
+      console.error(`Error fetching timesheets: ${error.message}`);
+      return of([]);
+    })
+  );
+}
+  
+getMyTimesheets(options: {
+  status?: string,
+  start_date?: string,
+  end_date?: string,
+  skip?: number, 
+  limit?: number
+} = {}): Observable<WeeklyTimesheet[]> {
+  let params = new HttpParams();
+  
+  if (options.status) params = params.set('status', options.status);
+  if (options.start_date) params = params.set('start_date', options.start_date);
+  if (options.end_date) params = params.set('end_date', options.end_date);
+  if (options.skip !== undefined) params = params.set('skip', options.skip.toString());
+  if (options.limit !== undefined) params = params.set('limit', options.limit.toString());
+  
+  // Log params in a way that's compatible with all Angular versions
+  const paramObj: {[key: string]: string} = {};
+  params.keys().forEach(key => {
+    paramObj[key] = params.get(key) || '';
+  });
+  console.log('Fetching my timesheets with params:', paramObj);
+  
+  return this.http.get<any[]>(`${this.timesheetsUrl}/me`, { params }).pipe(
+    map(timesheets => this.mapTimesheetResponse(timesheets)),
+    tap(timesheets => console.log(`Fetched ${timesheets.length} of my timesheets`)),
+    catchError(error => {
+      // If we get an error, log it and return empty array to avoid breaking the UI
+      console.error(`Error fetching my timesheets: ${error.message}`);
+      return of([]);
+    })
+  );
+}
   
   /**
    * Get current week's timesheet for the current user
    */
-  getCurrentTimesheet(): Observable<WeeklyTimesheet | null> {
+   /**
+   * Get current week's timesheet for the current user with improved error handling
+   */
+   getCurrentTimesheet(): Observable<WeeklyTimesheet | null> {
+    console.log('Fetching current timesheet');
+    
     return this.http.get<WeeklyTimesheet>(`${this.timesheetsUrl}/me/current`).pipe(
       tap(timesheet => console.log('Fetched current week timesheet')),
       catchError(error => {
         // If 404 (no current timesheet), return null instead of error
         if (error.status === 404) {
+          console.log('No current timesheet found (404 response). This is expected for new users.');
           return of(null);
         }
+        
+        // For other errors, log but still return null to avoid breaking the UI
         console.error(`Error fetching current timesheet: ${error.message}`);
         return of(null);
       })
@@ -115,17 +142,22 @@ export class HoursService {
   }
   
   /**
-   * Get a specific timesheet by ID
-   */
-  getTimesheet(id: string): Observable<WeeklyTimesheet> {
-    // Ensure ID is string format
-    const safeId = IdUtils.ensureString(id);
-    
-    return this.http.get<WeeklyTimesheet>(`${this.timesheetsUrl}/${safeId}`).pipe(
-      tap(_ => console.log(`Fetched timesheet id=${safeId}`)),
-      catchError(ErrorHandlingService.handleError<WeeklyTimesheet>(`getTimesheet id=${safeId}`))
-    );
-  }
+ * Enhanced getTimesheet method that enriches the response
+ * Replace your existing getTimesheet method with this
+ */
+getTimesheet(id: string): Observable<WeeklyTimesheet> {
+  // Ensure ID is string format
+  const safeId = IdUtils.ensureString(id);
+  
+  return this.http.get<any>(`${this.timesheetsUrl}/${safeId}`).pipe(
+    map(timesheet => this.enrichTimesheet(timesheet)),
+    tap(timesheet => console.log(`Fetched timesheet id=${safeId}`)),
+    catchError(error => {
+      console.error(`Error fetching timesheet ${safeId}:`, error);
+      return throwError(() => error);
+    })
+  );
+}
   
   /**
    * Create a new timesheet
@@ -616,41 +648,53 @@ getCurrentSchedule(): Observable<Schedule | null> {
  * Get employee-specific shifts directly from the employee/me endpoint
  * with better handling for when employee shifts don't come through properly
  */
-getMyScheduleShifts(scheduleId?: string): Observable<EmployeeShiftResponse[]> {
-  console.log('Fetching employee shifts' + (scheduleId ? ` for schedule: ${scheduleId}` : ''));
-  
-  // Build params
-  let params = new HttpParams();
-  
-  if (scheduleId) {
-    params = params.set('schedule_id', scheduleId);
-  } else {
-    // If no specific schedule ID, add current week date range
-    const today = new Date();
+  getMyScheduleShifts(scheduleId?: string, weekStartDate?: string): Observable<EmployeeShiftResponse[]> {
+    console.log('Fetching employee shifts' + 
+                (scheduleId ? ` for schedule: ${scheduleId}` : '') +
+                (weekStartDate ? ` for week starting: ${weekStartDate}` : ''));
     
-    // Get Monday of current week (start of week)
-    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-    monday.setHours(0, 0, 0, 0);
+    // Build params
+    let params = new HttpParams();
     
-    // Get Sunday of current week (end of week)
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    sunday.setHours(23, 59, 59, 999);
+    if (scheduleId) {
+      params = params.set('schedule_id', scheduleId);
+    } else if (weekStartDate) {
+      // If a specific week start date is provided, use it
+      params = params.set('week_start_date', weekStartDate);
+      
+      // Calculate week end date (6 days after start)
+      const startDate = new Date(weekStartDate);
+      const endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+      
+      const endDateStr = endDate.toISOString().split('T')[0];
+      console.log(`Using week range: ${weekStartDate} to ${endDateStr}`);
+    } else {
+      // If no specific schedule ID or week, use current week date range
+      const today = new Date();
+      
+      // Get Monday of current week (start of week)
+      const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+      monday.setHours(0, 0, 0, 0);
+      
+      // Get Sunday of current week (end of week)
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+      
+      console.log(`Using current week date range: ${monday.toISOString().split('T')[0]} to ${sunday.toISOString().split('T')[0]}`);
+      
+      params = params
+        .set('start_date', monday.toISOString().split('T')[0])
+        .set('end_date', sunday.toISOString().split('T')[0]);
+    }
     
-    console.log(`Using date range: ${monday.toISOString().split('T')[0]} to ${sunday.toISOString().split('T')[0]}`);
+    // Rest of your existing implementation...
+    const currentUser = this.authService.currentUser;
     
-    params = params
-      .set('start_date', monday.toISOString().split('T')[0])
-      .set('end_date', sunday.toISOString().split('T')[0]);
-  }
-  
-  // Get current user info to add to shifts if needed
-  const currentUser = this.authService.currentUser;
-  
-  // Direct call to employee/me endpoint
-  return this.http.get<EmployeeShiftResponse[]>(`${this.schedulesUrl}/employee/me`, { params }).pipe(
+    return this.http.get<EmployeeShiftResponse[]>(`${this.schedulesUrl}/employee/me`, { params }).pipe(
     tap(shifts => {
       console.log(`Received ${shifts.length} shifts from employee/me endpoint`);
       
@@ -717,4 +761,52 @@ getMyScheduleShifts(scheduleId?: string): Observable<EmployeeShiftResponse[]> {
     })
   );
 }
+
+/**
+ * Map API response to complete WeeklyTimesheet objects
+ * Add this to your HoursService class
+ */
+private mapTimesheetResponse(timesheets: any[]): WeeklyTimesheet[] {
+  return timesheets.map(timesheet => this.enrichTimesheet(timesheet));
+}
+
+/**
+ * Enrich a single timesheet with missing data
+ * Add this to your HoursService class
+ */
+private enrichTimesheet(timesheet: any): WeeklyTimesheet {
+  // First, ensure we have a valid object
+  if (!timesheet) {
+    console.warn('Received null/undefined timesheet from API');
+    return TimesheetUtils.ensureComplete({});
+  }
+  
+  // Add store name if we have the store ID but name is missing
+  if (timesheet.store_id && !timesheet.store_name) {
+    this.storeService.getStoreById(timesheet.store_id).subscribe(store => {
+      if (store) {
+        timesheet.store_name = store.name;
+      }
+    });
+  }
+  
+  // Add employee name if we have the employee ID but name is missing
+  if (timesheet.employee_id && !timesheet.employee_name) {
+    const currentUser = this.authService.currentUser;
+    // If this is the current user's timesheet, use their name
+    if (currentUser && currentUser._id === timesheet.employee_id) {
+      timesheet.employee_name = currentUser.full_name || currentUser.email;
+    } else {
+      this.employeeService.getEmployeeById(timesheet.employee_id).subscribe(employee => {
+        if (employee) {
+          timesheet.employee_name = employee.full_name;
+        }
+      });
+    }
+  }
+  
+  // Ensure the timesheet is complete with all required fields
+  return TimesheetUtils.ensureComplete(timesheet);
+}
+
 }

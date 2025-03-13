@@ -11,6 +11,8 @@ import { WeeklyTimesheet } from '../../../shared/models/hours.model';
 import { Store } from '../../../shared/models/store.model';
 import { DateTimeUtils } from '../../../core/utils/date-time-utils.service';
 import { HasPermissionDirective } from '../../../shared/directives/has-permission.directive';
+import { EmployeeService } from '../../../core/services/employee.service';
+import { forkJoin } from 'rxjs';
 
 @Component({
   selector: 'app-timesheet-list',
@@ -26,7 +28,7 @@ export class TimesheetListComponent implements OnInit {
   
   // Pagination
   currentPage = 1;
-  pageSize = 5;
+  pageSize = 10; // Increased from 5 to show more results
   totalTimesheets = 0;
   
   // Filters
@@ -36,46 +38,78 @@ export class TimesheetListComponent implements OnInit {
   startDate = '';
   endDate = '';
   
+  // Error handling
+  error = '';
+  noTimesheetsMessage = 'No timesheets found matching your filters.';
+  
   constructor(
     private hoursService: HoursService,
     private storeService: StoreService,
     private authService: AuthService,
     private permissionService: PermissionService,
+    private employeeService: EmployeeService,
     private router: Router
   ) {}
   
   ngOnInit(): void {
-    this.loadStores();
     this.applyDateRangeFilter(); // Sets default date range
-    this.loadCurrentTimesheet();
-    this.loadTimesheets();
+    // Load stores first, then load timesheets after stores are available
+    this.loadStoresAndTimesheets();
   }
   
-  loadStores(): void {
+  loadStoresAndTimesheets(): void {
+    this.loading = true;
+    
+    // First, load the stores
     this.storeService.getStores().subscribe({
       next: (stores) => {
         this.stores = stores;
+        console.log(`Loaded ${stores.length} stores`);
+        
+        // Now that stores are loaded, get timesheets and current timesheet
+        forkJoin({
+          current: this.hoursService.getCurrentTimesheet(),
+          history: this.loadTimesheetsData()
+        }).subscribe({
+          next: (results) => {
+            // Process current timesheet
+            if (results.current) {
+              this.currentTimesheet = results.current;
+              this.enrichTimesheetData(this.currentTimesheet);
+            }
+            
+            // Process history timesheets
+            if (results.history && Array.isArray(results.history)) {
+              console.log(`Loaded ${results.history.length} timesheets`);
+              
+              // Enrich with store and employee names if missing
+              results.history.forEach(timesheet => this.enrichTimesheetData(timesheet));
+              
+              this.timesheets = results.history;
+              
+              // Calculate pagination information
+              this.calculatePagination(results.history);
+            }
+            
+            // Update loading state
+            this.loading = false;
+          },
+          error: (err) => {
+            console.error('Error loading timesheet data:', err);
+            this.error = 'Failed to load timesheet data. Please try again later.';
+            this.loading = false;
+          }
+        });
       },
       error: (err) => {
         console.error('Error loading stores:', err);
+        this.error = 'Could not load stores. Please try again later.';
+        this.loading = false;
       }
     });
   }
   
-  loadCurrentTimesheet(): void {
-    this.hoursService.getCurrentTimesheet().subscribe({
-      next: (timesheet) => {
-        this.currentTimesheet = timesheet;
-      },
-      error: (err) => {
-        console.error('Error loading current timesheet:', err);
-      }
-    });
-  }
-  
-  loadTimesheets(): void {
-    this.loading = true;
-    
+  loadTimesheetsData() {
     const options: any = {
       skip: (this.currentPage - 1) * this.pageSize,
       limit: this.pageSize
@@ -97,30 +131,83 @@ export class TimesheetListComponent implements OnInit {
       options.end_date = this.endDate;
     }
     
-    this.hoursService.getMyTimesheets(options).subscribe({
+    console.log('Loading timesheets with options:', options);
+    
+    return this.hoursService.getMyTimesheets(options);
+  }
+  
+  loadTimesheets(): void {
+    this.loading = true;
+    this.error = '';
+    
+    this.loadTimesheetsData().subscribe({
       next: (timesheets) => {
+        console.log(`Loaded ${timesheets.length} timesheets`);
+        
+        // Enrich with store and employee names if missing
+        timesheets.forEach(timesheet => this.enrichTimesheetData(timesheet));
+        
         this.timesheets = timesheets;
         
-        // For real pagination, we would get the total count from the API
-        // For now, we'll estimate based on the returned results
-        if (timesheets.length === this.pageSize) {
-          // If we got a full page, there are probably more
-          this.totalTimesheets = (this.currentPage * this.pageSize) + 1;
-        } else if (timesheets.length > 0) {
-          // If we got a partial page, this is the last page
-          this.totalTimesheets = ((this.currentPage - 1) * this.pageSize) + timesheets.length;
-        } else {
-          // If we got no results, either there are no results or we're past the end
-          this.totalTimesheets = (this.currentPage - 1) * this.pageSize;
-        }
+        // Calculate pagination information
+        this.calculatePagination(timesheets);
         
         this.loading = false;
       },
       error: (err) => {
         console.error('Error loading timesheets:', err);
+        this.error = 'Failed to load timesheets. Please try again later.';
         this.loading = false;
       }
     });
+  }
+  
+  // Helper method to calculate pagination info
+  calculatePagination(timesheets: WeeklyTimesheet[]): void {
+    // For real pagination, we would get the total count from the API
+    // For now, we'll estimate based on the returned results
+    if (timesheets.length === this.pageSize) {
+      // If we got a full page, there are probably more
+      this.totalTimesheets = (this.currentPage * this.pageSize) + 1;
+    } else if (timesheets.length > 0) {
+      // If we got a partial page, this is the last page
+      this.totalTimesheets = ((this.currentPage - 1) * this.pageSize) + timesheets.length;
+    } else if (this.currentPage > 1) {
+      // If we got no results but we're past page 1, we've gone too far
+      this.totalTimesheets = (this.currentPage - 1) * this.pageSize;
+      this.currentPage--; // Go back to the previous page
+      this.loadTimesheets(); // Reload with the correct page
+      return;
+    } else {
+      // If we're on page 1 with no results, there are no results
+      this.totalTimesheets = 0;
+      this.noTimesheetsMessage = 'No timesheets found matching your filters.';
+    }
+  }
+  
+  // Helper method to add missing names to timesheet objects if needed
+  enrichTimesheetData(timesheet: WeeklyTimesheet): void {
+    // Add store name if missing
+    if (!timesheet.store_name && timesheet.store_id) {
+      const store = this.stores.find(s => s._id === timesheet.store_id);
+      if (store) {
+        timesheet.store_name = store.name;
+        console.log(`Added store name ${store.name} to timesheet`);
+      } else {
+        console.warn(`Could not find store with ID ${timesheet.store_id} in stores list`);
+      }
+    }
+    
+    // Add employee name if missing
+    if (!timesheet.employee_name && this.authService.currentUser) {
+      timesheet.employee_name = this.authService.currentUser.full_name || 
+                              this.authService.currentUser.email;
+    }
+    
+    // Ensure total_earnings is a number (in case it's coming as string from API)
+    if (typeof timesheet.total_earnings === 'string') {
+      timesheet.total_earnings = parseFloat(timesheet.total_earnings);
+    }
   }
   
   applyDateRangeFilter(): void {
@@ -156,7 +243,13 @@ export class TimesheetListComponent implements OnInit {
     this.startDate = DateTimeUtils.formatDateForAPI(startDate);
     this.endDate = DateTimeUtils.formatDateForAPI(endDate);
     
-    this.loadTimesheets();
+    // Reset to first page when filter changes
+    this.currentPage = 1;
+    
+    // Only load timesheets if the stores are already loaded
+    if (this.stores.length > 0) {
+      this.loadTimesheets();
+    }
   }
   
   previousPage(): void {
