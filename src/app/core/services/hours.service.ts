@@ -39,8 +39,7 @@ export class HoursService {
   // ======== Timesheet Methods ========
   
  /**
- * Enhanced getTimesheets method that enriches the response
- * Replace your existing getTimesheets method with this
+ * Improved version of getTimesheets with proper role-based filtering
  */
 getTimesheets(options: {
   employee_id?: string,
@@ -541,8 +540,7 @@ getTimesheet(id: string): Observable<WeeklyTimesheet> {
   }
 
  /**
- * Get current user's schedule for the current week
- * with improved employee data handling
+ * Improved getCurrentSchedule method with better role-based handling
  */
 getCurrentSchedule(): Observable<Schedule | null> {
   console.log('Fetching current schedule, user role:', this.permissionService.getRoleIdentifier());
@@ -565,8 +563,15 @@ getCurrentSchedule(): Observable<Schedule | null> {
     }).pipe(
       map(schedules => {
         if (schedules && schedules.length > 0) {
-          console.log(`Found schedule with ${schedules[0].shifts?.length || 0} shifts`);
-          return schedules[0];
+          console.log(`Found current week schedule with ${schedules[0].shifts?.length || 0} shifts`);
+          
+          // Ensure the schedule has a shift_count property
+          const schedule = schedules[0];
+          if (Array.isArray(schedule.shifts)) {
+            schedule.shift_count = schedule.shifts.length;
+          }
+          
+          return schedule;
         }
         return null;
       }),
@@ -577,10 +582,10 @@ getCurrentSchedule(): Observable<Schedule | null> {
     );
   }
   
-  // For employees - DIRECTLY use the employee/me endpoint
+  // For employees - use the employee/me endpoint
   console.log('Employee: Using employee/me endpoint directly');
   
-  // Direct API call to get employee shifts - this returns exactly what we need
+  // Direct API call to get employee shifts
   return this.http.get<EmployeeShiftResponse[]>(`${this.schedulesUrl}/employee/me`).pipe(
     tap(shifts => console.log(`Got ${shifts.length} shifts from employee/me endpoint`)),
     map(shifts => {
@@ -628,10 +633,10 @@ getCurrentSchedule(): Observable<Schedule | null> {
         week_start_date: DateTimeUtils.formatDateForAPI(weekStart),
         week_end_date: DateTimeUtils.formatDateForAPI(weekEnd),
         shifts: shifts as unknown as ScheduleShift[],
-        shift_count: shifts.length, // Add shift_count property
-        created_by: '',  // Required by the interface
+        shift_count: shifts.length, // Ensure shift_count property is set
+        created_by: '',
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString() // Add updated_at if needed
+        updated_at: new Date().toISOString()
       };
       
       console.log(`Created schedule with ${shifts.length} shifts`);
@@ -644,57 +649,55 @@ getCurrentSchedule(): Observable<Schedule | null> {
   );
 }
 
-  /**
- * Get employee-specific shifts directly from the employee/me endpoint
- * with better handling for when employee shifts don't come through properly
+/**
+ * Improved getMyScheduleShifts method to better handle week filtering
  */
-  getMyScheduleShifts(scheduleId?: string, weekStartDate?: string): Observable<EmployeeShiftResponse[]> {
-    console.log('Fetching employee shifts' + 
-                (scheduleId ? ` for schedule: ${scheduleId}` : '') +
-                (weekStartDate ? ` for week starting: ${weekStartDate}` : ''));
+getMyScheduleShifts(scheduleId?: string, weekStartDate?: string): Observable<EmployeeShiftResponse[]> {
+  console.log('Fetching employee shifts' + 
+              (scheduleId ? ` for schedule: ${scheduleId}` : '') +
+              (weekStartDate ? ` for week starting: ${weekStartDate}` : ''));
+  
+  // Build params
+  let params = new HttpParams();
+  
+  if (scheduleId) {
+    params = params.set('schedule_id', scheduleId);
+  } else if (weekStartDate) {
+    // If a specific week start date is provided, use it
+    params = params.set('week_start_date', weekStartDate);
     
-    // Build params
-    let params = new HttpParams();
+    // Calculate week end date (6 days after start)
+    const startDate = new Date(weekStartDate);
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
     
-    if (scheduleId) {
-      params = params.set('schedule_id', scheduleId);
-    } else if (weekStartDate) {
-      // If a specific week start date is provided, use it
-      params = params.set('week_start_date', weekStartDate);
-      
-      // Calculate week end date (6 days after start)
-      const startDate = new Date(weekStartDate);
-      const endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + 6);
-      
-      const endDateStr = endDate.toISOString().split('T')[0];
-      console.log(`Using week range: ${weekStartDate} to ${endDateStr}`);
-    } else {
-      // If no specific schedule ID or week, use current week date range
-      const today = new Date();
-      
-      // Get Monday of current week (start of week)
-      const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-      const monday = new Date(today);
-      monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-      monday.setHours(0, 0, 0, 0);
-      
-      // Get Sunday of current week (end of week)
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      sunday.setHours(23, 59, 59, 999);
-      
-      console.log(`Using current week date range: ${monday.toISOString().split('T')[0]} to ${sunday.toISOString().split('T')[0]}`);
-      
-      params = params
-        .set('start_date', monday.toISOString().split('T')[0])
-        .set('end_date', sunday.toISOString().split('T')[0]);
-    }
+    const endDateStr = endDate.toISOString().split('T')[0];
+    console.log(`Using week range: ${weekStartDate} to ${endDateStr}`);
+  } else {
+    // If no specific schedule ID or week, use current week date range
+    const today = new Date();
     
-    // Rest of your existing implementation...
-    const currentUser = this.authService.currentUser;
+    // Get Monday of current week (start of week)
+    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+    monday.setHours(0, 0, 0, 0);
     
-    return this.http.get<EmployeeShiftResponse[]>(`${this.schedulesUrl}/employee/me`, { params }).pipe(
+    // Get Sunday of current week (end of week)
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+    
+    console.log(`Using current week date range: ${monday.toISOString().split('T')[0]} to ${sunday.toISOString().split('T')[0]}`);
+    
+    params = params
+      .set('start_date', monday.toISOString().split('T')[0])
+      .set('end_date', sunday.toISOString().split('T')[0]);
+  }
+  
+  const currentUser = this.authService.currentUser;
+  
+  return this.http.get<EmployeeShiftResponse[]>(`${this.schedulesUrl}/employee/me`, { params }).pipe(
     tap(shifts => {
       console.log(`Received ${shifts.length} shifts from employee/me endpoint`);
       

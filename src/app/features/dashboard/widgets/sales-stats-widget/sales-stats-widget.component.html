@@ -1,0 +1,82 @@
+<div class="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden">
+    <div class="p-5">
+      <h3 class="text-lg font-medium mb-4">Sales Overview</h3>
+      
+      <div *ngIf="loading" class="flex justify-center py-4">
+        <div class="w-6 h-6 border-2 border-t-2 border-primary-500 rounded-full animate-spin"></div>
+      </div>
+      
+      <div *ngIf="!loading">
+        <!-- Sales Summary -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Today's Sales</p>
+            <p class="text-2xl font-semibold">${{ formatCurrency(todaySales) }}</p>
+            <div class="mt-1 flex items-center text-sm">
+              <svg *ngIf="salesTrend > 0" class="h-4 w-4 text-green-500 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
+              </svg>
+              <svg *ngIf="salesTrend < 0" class="h-4 w-4 text-red-500 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+              </svg>
+              <span [class.text-green-600]="salesTrend > 0" [class.text-red-600]="salesTrend < 0">
+                {{ Math.abs(salesTrend) }}% from yesterday
+              </span>
+            </div>
+          </div>
+          
+          <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+            <p class="text-sm text-slate-500 dark:text-slate-400">This Week</p>
+            <p class="text-2xl font-semibold">${{ formatCurrency(weekSales) }}</p>
+            <div class="mt-1 flex items-center text-sm">
+              <svg *ngIf="weekTrend > 0" class="h-4 w-4 text-green-500 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
+              </svg>
+              <svg *ngIf="weekTrend < 0" class="h-4 w-4 text-red-500 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+              </svg>
+              <span [class.text-green-600]="weekTrend > 0" [class.text-red-600]="weekTrend < 0">
+                {{ Math.abs(weekTrend) }}% from last week
+              </span>
+            </div>
+          </div>
+          
+          <div class="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+            <p class="text-sm text-slate-500 dark:text-slate-400">This Month</p>
+            <p class="text-2xl font-semibold">${{ formatCurrency(monthSales) }}</p>
+            <div class="mt-1 flex items-center text-sm">
+              <svg *ngIf="monthTrend > 0" class="h-4 w-4 text-green-500 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
+              </svg>
+              <svg *ngIf="monthTrend < 0" class="h-4 w-4 text-red-500 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+              </svg>
+              <span [class.text-green-600]="monthTrend > 0" [class.text-red-600]="monthTrend < 0">
+                {{ Math.abs(monthTrend) }}% from last month
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Top Performing Stores -->
+        <h4 class="text-sm font-semibold uppercase text-slate-500 dark:text-slate-400 mb-2">Top Stores This Week</h4>
+        <div class="space-y-2">
+          <div *ngFor="let store of topStores; let i = index" class="flex items-center justify-between">
+            <div class="flex items-center">
+              <div class="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center mr-3">
+                {{ i + 1 }}
+              </div>
+              <span>{{ store.name }}</span>
+            </div>
+            <span class="font-medium">${{ formatCurrency(store.sales) }}</span>
+          </div>
+        </div>
+        
+        <div class="mt-4 text-right">
+          <a routerLink="/reports" class="text-primary-600 hover:text-primary-700 dark:text-primary-400 hover:underline text-sm">
+            View detailed reports
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>

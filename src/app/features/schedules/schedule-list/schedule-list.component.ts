@@ -8,7 +8,7 @@ import { StoreService } from '../../../core/services/store.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PermissionService } from '../../../core/auth/permission.service';
 import { EmployeeService } from '../../../core/services/employee.service';
-import { Schedule } from '../../../shared/models/hours.model';
+import { Schedule, ScheduleShift } from '../../../shared/models/hours.model';
 import { Store } from '../../../shared/models/store.model';
 import { DateTimeUtils } from '../../../core/utils/date-time-utils.service';
 import { HasPermissionDirective } from '../../../shared/directives/has-permission.directive';
@@ -260,51 +260,51 @@ export class ScheduleListComponent implements OnInit {
   schedules: Schedule[] = [];
   currentWeekSchedule: Schedule | null = null;
   stores: Store[] = [];
-  
+
   // Week navigation - NEW
   isCurrentWeek = true;
   selectedWeekStartDate: Date | null = null;
   isLoadingWeek = false;
-  
+
   // Pagination
   currentPage = 1;
   pageSize = 5;
   totalSchedules = 0;
-  
+
   // Filters
   storeFilter = '';
   startDate = '';
   endDate = '';
-  
+
   // User info
   currentEmployeeId: string | null = null;
   userRole: 'admin' | 'manager' | 'employee' | 'unknown' = 'unknown';
   showStoreFilter = true; // Default true, will be set based on role
-  
+
   constructor(
     private hoursService: HoursService,
     private storeService: StoreService,
     private authService: AuthService,
     private permissionService: PermissionService,
     private employeeService: EmployeeService,
-    private changeDetector: ChangeDetectorRef 
-  ) {}
-  
+    private changeDetector: ChangeDetectorRef
+  ) { }
+
   ngOnInit(): void {
     this.setupDateRange();
     this.setupUserRole();
     this.loadStores();
     this.loadCurrentWeekSchedule();
   }
-  
+
   setupUserRole(): void {
     // Determine user role
     this.userRole = this.permissionService.getRoleIdentifier();
-    
+
     // For employees and managers, we need their employee ID for filtering
     if (this.userRole === 'employee' || this.userRole === 'manager') {
       this.showStoreFilter = this.userRole === 'manager';
-      
+
       // Get employee ID for current user
       this.hoursService.getCurrentEmployeeId().subscribe(employeeId => {
         this.currentEmployeeId = employeeId;
@@ -315,38 +315,38 @@ export class ScheduleListComponent implements OnInit {
       this.loadSchedules();
     }
   }
-  
+
   /**
    * Setup date range to ensure current week is included
    */
   setupDateRange(): void {
     // Default date range - set to current month but ensure it includes the current week
     const today = new Date();
-    
+
     // Calculate the start of the current week (Monday)
     const currentWeekStart = this.getWeekStartDate(today);
     this.selectedWeekStartDate = new Date(currentWeekStart);
-    
+
     // Calculate week end (Sunday)
     const currentWeekEnd = new Date(currentWeekStart);
     currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
-    
+
     // Use either the 1st of the month or the start of the current week, whichever is earlier
     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const startDate = firstDayOfMonth < currentWeekStart ? firstDayOfMonth : currentWeekStart;
-    
+
     // End date should include at least the end of the current week (Sunday)
     // Use either the last day of the month or the end of the current week, whichever is later
     const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     const endDate = lastDayOfMonth > currentWeekEnd ? lastDayOfMonth : currentWeekEnd;
-    
+
     // Format dates for API - use UTC format to avoid timezone issues
     this.startDate = DateTimeUtils.formatDateForAPI(startDate);
     this.endDate = DateTimeUtils.formatDateForAPI(endDate);
-    
+
     console.log(`Date range set to: ${this.startDate} to ${this.endDate}`);
   }
-  
+
   loadStores(): void {
     this.storeService.getStores().subscribe({
       next: (stores) => {
@@ -357,104 +357,99 @@ export class ScheduleListComponent implements OnInit {
       }
     });
   }
-  
+
   /**
-   * New method to handle week navigation
-   */
-/**
- * Improved method to handle week navigation for multi-store employees
- */
-loadScheduleForWeek(weekStartDate: Date): void {
-  this.isLoadingWeek = true;
-  
-  const weekStart = this.getWeekStartDate(weekStartDate);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
-  
-  // Check if this is the current week
-  const currentWeekStart = this.getWeekStartDate(new Date());
-  this.isCurrentWeek = weekStart.getTime() === currentWeekStart.getTime();
-  
-  // Format dates for API
-  const weekStartStr = DateTimeUtils.formatDateForAPI(weekStart);
-  const weekEndStr = DateTimeUtils.formatDateForAPI(weekEnd);
-  
-  console.log(`Loading schedule for week: ${weekStartStr} to ${weekEndStr}`);
-  
-  // Make request without store filter to see schedules from all stores
-  this.hoursService.getSchedules({
-    start_date: weekStartStr,
-    end_date: weekEndStr
-  }).subscribe({
-    next: (schedules) => {
-      console.log(`Received ${schedules.length} schedules for week navigation`);
-      
-      if (schedules.length === 0) {
-        console.log('No schedules found for the selected week');
-        this.currentWeekSchedule = null;
-      } else {
-        if (this.userRole === 'employee' && this.currentEmployeeId) {
-          // For employees, we need to combine shifts from multiple schedules
-          const employeeIdStr = String(this.currentEmployeeId);
-          let combinedShifts: string | any[] = [];
-          let selectedSchedule = null;
-          
-          // Check each schedule for this employee's shifts
-          for (const schedule of schedules) {
-            if (Array.isArray(schedule.shifts)) {
-              const employeeShifts = schedule.shifts.filter(shift => 
-                String(shift.employee_id) === employeeIdStr
-              );
-              
-              if (employeeShifts.length > 0) {
-                console.log(`Found ${employeeShifts.length} shifts for employee in schedule: ${schedule.title}`);
-                combinedShifts = [...combinedShifts, ...employeeShifts];
-                
-                // Use the first schedule that has shifts for this employee as the base
-                if (!selectedSchedule) {
-                  selectedSchedule = schedule;
+  * Improved loadScheduleForWeek method with better handling for multi-store employees
+  */
+  loadScheduleForWeek(weekStartDate: Date): void {
+    this.isLoadingWeek = true;
+
+    const weekStart = this.getWeekStartDate(weekStartDate);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+
+    // Check if this is the current week
+    const currentWeekStart = this.getWeekStartDate(new Date());
+    this.isCurrentWeek = weekStart.getTime() === currentWeekStart.getTime();
+
+    // Format dates for API
+    const weekStartStr = DateTimeUtils.formatDateForAPI(weekStart);
+    const weekEndStr = DateTimeUtils.formatDateForAPI(weekEnd);
+
+    console.log(`Loading schedule for week: ${weekStartStr} to ${weekEndStr}`);
+
+    // Make request without store filter to see schedules from all stores
+    this.hoursService.getSchedules({
+      start_date: weekStartStr,
+      end_date: weekEndStr
+    }).subscribe({
+      next: (schedules) => {
+        console.log(`Received ${schedules.length} schedules for week navigation`);
+
+        if (schedules.length === 0) {
+          console.log('No schedules found for the selected week');
+          this.currentWeekSchedule = null;
+        } else {
+          if (this.userRole === 'employee' && this.currentEmployeeId) {
+            // For employees, we need to combine shifts from multiple schedules
+            const employeeIdStr = String(this.currentEmployeeId);
+            let combinedShifts: string | any[] = [];
+            let selectedSchedule = null;
+
+            // Check each schedule for this employee's shifts
+            for (const schedule of schedules) {
+              if (Array.isArray(schedule.shifts)) {
+                const employeeShifts = schedule.shifts.filter(shift =>
+                  String(shift.employee_id) === employeeIdStr
+                );
+
+                if (employeeShifts.length > 0) {
+                  console.log(`Found ${employeeShifts.length} shifts for employee in schedule: ${schedule.title}`);
+                  combinedShifts = [...combinedShifts, ...employeeShifts];
+
+                  // Use the first schedule that has shifts for this employee as the base
+                  if (!selectedSchedule) {
+                    selectedSchedule = schedule;
+                  }
                 }
               }
             }
-          }
-          
-          if (selectedSchedule && combinedShifts.length > 0) {
-            // Create a combined schedule with all shifts for this employee
-            this.currentWeekSchedule = {
-              ...selectedSchedule,
-              shifts: combinedShifts,
-              store_name: combinedShifts.length > 0 ? 
-                `${selectedSchedule.store_name} (and ${combinedShifts.length} shifts)` : 
-                selectedSchedule.store_name
-            };
-            console.log(`Created combined schedule with ${combinedShifts.length} shifts for employee`);
+
+            if (selectedSchedule && combinedShifts.length > 0) {
+              // Create a combined schedule with all shifts for this employee
+              this.currentWeekSchedule = {
+                ...selectedSchedule,
+                shifts: combinedShifts,
+                store_name: combinedShifts.length > 0 ?
+                  `${selectedSchedule.store_name} (and ${combinedShifts.length} shifts)` :
+                  selectedSchedule.store_name
+              };
+              console.log(`Created combined schedule with ${combinedShifts.length} shifts for employee`);
+            } else {
+              // No shifts found for this employee
+              console.log('No shifts found for this employee in any schedule');
+              this.currentWeekSchedule = {
+                ...schedules[0],
+                shifts: []
+              };
+            }
           } else {
-            // No shifts found for this employee
-            console.log('No shifts found for this employee in any schedule');
-            this.currentWeekSchedule = {
-              ...schedules[0],
-              shifts: []
-            };
+            // For admin/manager, just use the first schedule
+            console.log(`Using first schedule: ${schedules[0].title} with ${schedules[0].shifts?.length || 0} shifts`);
+            this.currentWeekSchedule = schedules[0];
           }
-        } else {
-          // For admin/manager, just use the first schedule
-          console.log(`Using first schedule: ${schedules[0].title} with ${schedules[0].shifts?.length || 0} shifts`);
-          this.currentWeekSchedule = schedules[0];
         }
+
+        this.isLoadingWeek = false;
+      },
+      error: (err) => {
+        console.error('Error loading week schedule:', err);
+        this.currentWeekSchedule = null;
+        this.isLoadingWeek = false;
       }
-      
-      this.isLoadingWeek = false;
-      this.changeDetector.detectChanges();
-    },
-    error: (err) => {
-      console.error('Error loading week schedule:', err);
-      this.currentWeekSchedule = null;
-      this.isLoadingWeek = false;
-      this.changeDetector.detectChanges();
-    }
-  });
-}
-  
+    });
+  }
+
   /**
    * Navigate to previous week - NEW FEATURE
    */
@@ -463,12 +458,12 @@ loadScheduleForWeek(weekStartDate: Date): void {
       const previousWeekStart = new Date(this.selectedWeekStartDate);
       previousWeekStart.setDate(previousWeekStart.getDate() - 7);
       this.selectedWeekStartDate = previousWeekStart;
-      
+
       // Load schedule using the specialized employee/me endpoint
       this.loadEmployeeScheduleForWeek(previousWeekStart);
     }
   }
-  
+
   /**
    * Navigate to next week - NEW FEATURE
    */
@@ -477,12 +472,12 @@ loadScheduleForWeek(weekStartDate: Date): void {
       const nextWeekStart = new Date(this.selectedWeekStartDate);
       nextWeekStart.setDate(nextWeekStart.getDate() + 7);
       this.selectedWeekStartDate = nextWeekStart;
-      
+
       // Load schedule using the specialized employee/me endpoint
       this.loadEmployeeScheduleForWeek(nextWeekStart);
     }
   }
-  
+
   /**
    * Get start of week date (Monday) from any date
    */
@@ -494,145 +489,143 @@ loadScheduleForWeek(weekStartDate: Date): void {
     result.setHours(0, 0, 0, 0);
     return result;
   }
-  
-  /**
- * Improved date filtering and schedule loading
- */
-loadSchedules(): void {
-  this.loading = true;
-  
-  const options: any = {
-    skip: (this.currentPage - 1) * this.pageSize,
-    limit: this.pageSize
-  };
-  
-  // For managers, apply store filter if selected
-  // For employees, don't filter by store to see all their schedules
-  if (this.userRole === 'manager' && this.storeFilter) {
-    options.store_id = this.storeFilter;
-  }
-  
-  // Add date filters if provided
-  if (this.startDate) {
-    options.start_date = this.startDate;
-    console.log(`Using start date filter: ${this.startDate}`);
-  }
-  
-  if (this.endDate) {
-    options.end_date = this.endDate;
-    console.log(`Using end date filter: ${this.endDate}`);
-  }
-  
-  console.log(`Loading schedules with filters:`, options);
-  
-  this.hoursService.getSchedules(options).subscribe({
-    next: (schedules) => {
-      console.log(`Received ${schedules.length} schedules from API`);
-      
-      // Ensure all schedules have shifts array initialized
-      schedules.forEach(schedule => {
-        if (!Array.isArray(schedule.shifts)) {
-          schedule.shifts = [];
-        }
-      });
-      
-      // For employees, filter schedules to only show those with their shifts
-      if (this.userRole === 'employee' && this.currentEmployeeId) {
-        const employeeIdStr = String(this.currentEmployeeId);
-        console.log(`Filtering schedules for employee ID: ${employeeIdStr}`);
-        
-        let employeeSchedules = schedules.filter(schedule => {
-          // Make sure shifts is an array and check if any shift belongs to this employee
-          const hasEmployeeShift = Array.isArray(schedule.shifts) && 
-            schedule.shifts.some(shift => 
-              shift && shift.employee_id && String(shift.employee_id) === employeeIdStr
-            );
-          
-          if (hasEmployeeShift) {
-            console.log(`Schedule ${schedule.title} has shifts for employee ${employeeIdStr}`);
-            
-            // Create a copy with only this employee's shifts
-            schedule.shifts = schedule.shifts.filter(shift => 
-              String(shift.employee_id) === employeeIdStr
-            );
-          }
-          
-          return hasEmployeeShift;
-        });
-        
-        console.log(`Found ${employeeSchedules.length} schedules with employee shifts`);
-        
-        // Include current week schedule if it has shifts for this employee
-        if (this.currentWeekSchedule && this.currentWeekSchedule._id) {
-          const currentScheduleExists = employeeSchedules.some(s => s._id === this.currentWeekSchedule?._id);
-          
-          if (!currentScheduleExists && this.currentWeekSchedule.shifts.length > 0) {
-            console.log('Adding current week schedule to results');
-            employeeSchedules = [this.currentWeekSchedule, ...employeeSchedules];
-          }
-        }
-        
-        this.schedules = employeeSchedules;
-      } else {
-        // Admin and managers see all schedules
-        this.schedules = schedules;
-      }
-      
-      // Fetch store names for schedules if needed
-      this.enhanceSchedulesWithStoreNames();
-      
-      this.updatePagination();
-      this.loading = false;
-      this.changeDetector.detectChanges();
-    },
-    error: (err) => {
-      console.error('Error loading schedules:', err);
-      this.loading = false;
-      this.changeDetector.detectChanges();
-    }
-  });
-}
 
-/**
- * Add store names to schedules that don't have them
- */
-enhanceSchedulesWithStoreNames(): void {
-  const storePromises: Promise<void>[] = [];
-  
-  this.schedules.forEach(schedule => {
-    if (!schedule.store_name && schedule.store_id) {
-      const promise = new Promise<void>((resolve) => {
-        this.storeService.getStoreById(schedule.store_id).subscribe({
-          next: (store) => {
-            schedule.store_name = store.name;
-            resolve();
-          },
-          error: () => {
-            schedule.store_name = 'Unknown Store';
-            resolve();
+  /**
+  * Enhanced loadSchedules method with improved error handling and role-based filtering
+  */
+  loadSchedules(): void {
+    this.loading = true;
+
+    const options: any = {
+      skip: (this.currentPage - 1) * this.pageSize,
+      limit: this.pageSize
+    };
+
+    // For managers, apply store filter if selected
+    if (this.userRole === 'manager' && this.storeFilter) {
+      options.store_id = this.storeFilter;
+    }
+
+    // Add date filters if provided
+    if (this.startDate) {
+      options.start_date = this.startDate;
+      console.log(`Using start date filter: ${this.startDate}`);
+    }
+
+    if (this.endDate) {
+      options.end_date = this.endDate;
+      console.log(`Using end date filter: ${this.endDate}`);
+    }
+
+    console.log(`Loading schedules with filters:`, options);
+
+    this.hoursService.getSchedules(options).subscribe({
+      next: (schedules) => {
+        console.log(`Received ${schedules.length} schedules from API`);
+
+        this.schedules = this.fixScheduleData(schedules);
+        // Ensure all schedules have shifts array initialized
+        schedules.forEach(schedule => {
+          if (!Array.isArray(schedule.shifts)) {
+            schedule.shifts = [];
           }
         });
-      });
-      storePromises.push(promise);
-    }
-  });
-  
-  // Wait for all store lookups to complete
-  Promise.all(storePromises);
-}
+
+        // For employees, filter schedules to only show those with their shifts
+        if (this.userRole === 'employee' && this.currentEmployeeId) {
+          const employeeIdStr = String(this.currentEmployeeId);
+          console.log(`Filtering schedules for employee ID: ${employeeIdStr}`);
+
+          let employeeSchedules = schedules.filter(schedule => {
+            // Make sure shifts is an array and check if any shift belongs to this employee
+            const hasEmployeeShift = Array.isArray(schedule.shifts) &&
+              schedule.shifts.some(shift =>
+                shift && shift.employee_id && String(shift.employee_id) === employeeIdStr
+              );
+
+            if (hasEmployeeShift) {
+              console.log(`Schedule ${schedule.title} has shifts for employee ${employeeIdStr}`);
+
+              // Create a copy with only this employee's shifts
+              schedule.shifts = schedule.shifts.filter(shift =>
+                String(shift.employee_id) === employeeIdStr
+              );
+            }
+
+            return hasEmployeeShift;
+          });
+
+          console.log(`Found ${employeeSchedules.length} schedules with employee shifts`);
+
+          // Include current week schedule if it has shifts for this employee
+          if (this.currentWeekSchedule && this.currentWeekSchedule._id) {
+            const currentScheduleExists = employeeSchedules.some(s => s._id === this.currentWeekSchedule?._id);
+
+            if (!currentScheduleExists && this.currentWeekSchedule.shifts.length > 0) {
+              console.log('Adding current week schedule to results');
+              employeeSchedules = [this.currentWeekSchedule, ...employeeSchedules];
+            }
+          }
+
+          this.schedules = employeeSchedules;
+        } else {
+          // Admin and managers see all schedules
+          this.schedules = schedules;
+        }
+
+        // Fetch store names for schedules if needed
+        this.enhanceSchedulesWithStoreNames();
+
+        this.updatePagination();
+        this.loading = false;
+      },
+      error: (err) => {
+        console.error('Error loading schedules:', err);
+        this.loading = false;
+      }
+    });
+  }
+
+  /**
+   * Add store names to schedules that don't have them
+   */
+  enhanceSchedulesWithStoreNames(): void {
+    const storePromises: Promise<void>[] = [];
+
+    this.schedules.forEach(schedule => {
+      if (!schedule.store_name && schedule.store_id) {
+        const promise = new Promise<void>((resolve) => {
+          this.storeService.getStoreById(schedule.store_id).subscribe({
+            next: (store) => {
+              schedule.store_name = store.name;
+              resolve();
+            },
+            error: () => {
+              schedule.store_name = 'Unknown Store';
+              resolve();
+            }
+          });
+        });
+        storePromises.push(promise);
+      }
+    });
+
+    // Wait for all store lookups to complete
+    Promise.all(storePromises);
+  }
 
   /**
    * Enhance schedule data with missing information
    */
   enhanceSchedulesData(): void {
     const storePromises: Promise<void>[] = [];
-    
+
     this.schedules.forEach(schedule => {
       // Ensure shifts array exists
       if (!schedule.shifts || !Array.isArray(schedule.shifts)) {
         schedule.shifts = [];
       }
-      
+
       // If store name is missing but we have store_id, fetch store details
       if (!schedule.store_name && schedule.store_id) {
         const promise = new Promise<void>((resolve) => {
@@ -650,36 +643,81 @@ enhanceSchedulesWithStoreNames(): void {
         storePromises.push(promise);
       }
     });
-    
+
     // Wait for all store lookups to complete
     Promise.all(storePromises);
   }
-  
+
   /**
-   * Load the current week's schedule with improved error handling
-   */
+ * Improved loadCurrentSchedule method with proper week date handling
+ */
   loadCurrentWeekSchedule(): void {
-    this.hoursService.getCurrentSchedule().subscribe({
-      next: (schedule) => {
-        if (schedule) {
-          console.log(`Updating current week schedule with ${schedule.shifts?.length || 0} shifts`);
-          this.currentWeekSchedule = schedule;
-          this.selectedWeekStartDate = new Date(schedule.week_start_date);
+    console.log('Loading current schedule with improved handling');
+
+    // Use the updated version appropriate for the user's role
+    if (this.userRole === 'employee') {
+      // For employees, use the employee-specific endpoint
+      this.hoursService.getMyScheduleShifts().subscribe({
+        next: (shifts) => {
+          const hasShifts = shifts && shifts.length > 0;
+
+          if (hasShifts) {
+            // Extract common schedule data from the first shift
+            const firstShift = shifts[0];
+            const scheduleId = firstShift.schedule_id || '';
+            const storeId = firstShift.store_id || '';
+            const storeName = firstShift.store_name || '';
+            const scheduleTitle = firstShift.schedule_title || 'Weekly Schedule';
+
+            // Calculate week dates based on the day of the first shift
+            const today = new Date();
+            const weekStart = this.getWeekStartDate(today);
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+
+            // Build a Schedule object from the shifts
+            this.currentWeekSchedule = {
+              _id: scheduleId,
+              title: scheduleTitle,
+              store_id: storeId,
+              store_name: storeName,
+              week_start_date: DateTimeUtils.formatDateForAPI(weekStart),
+              week_end_date: DateTimeUtils.formatDateForAPI(weekEnd),
+              shifts: shifts,
+              shift_count: shifts.length,
+              created_by: '',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            };
+          } else {
+            this.currentWeekSchedule = null;
+          }
+
           this.isCurrentWeek = true;
-          
-          // Force change detection if needed
-          this.changeDetector.detectChanges(); // Inject ChangeDetectorRef in constructor
-        } else {
-          this.selectedWeekStartDate = this.getWeekStartDate(new Date());
-          this.loadScheduleForWeek(this.selectedWeekStartDate);
+          this.isLoadingWeek = false;
+        },
+        error: (err) => {
+          console.error('Error loading current employee schedule:', err);
+          this.currentWeekSchedule = null;
+          this.isLoadingWeek = false;
         }
-      },
-      error: (err) => {
-        console.error('Error loading current week schedule:', err);
-        this.selectedWeekStartDate = this.getWeekStartDate(new Date());
-        this.loadScheduleForWeek(this.selectedWeekStartDate);
-      }
-    });
+      });
+    } else {
+      // For admin/manager, use the general getCurrentSchedule method
+      this.hoursService.getCurrentSchedule().subscribe({
+        next: (schedule) => {
+          const fixedSchedules = this.fixScheduleData([schedule]);
+          this.currentWeekSchedule = schedule;
+          this.isCurrentWeek = true;
+          this.isLoadingWeek = false;
+        },
+        error: (err) => {
+          console.error('Error loading current schedule:', err);
+          this.currentWeekSchedule = null;
+          this.isLoadingWeek = false;
+        }
+      });
+    }
   }
 
   /**
@@ -697,19 +735,19 @@ enhanceSchedulesWithStoreNames(): void {
 
   deleteSchedule(scheduleId: string): void {
     if (!scheduleId) return;
-    
+
     if (!confirm('Are you sure you want to delete this schedule? This action cannot be undone.')) {
       return;
     }
-    
+
     this.loading = true;
-    
+
     this.hoursService.deleteSchedule(scheduleId).subscribe({
       next: (result) => {
         if (result) {
           // Remove from the list
           this.schedules = this.schedules.filter(s => s._id !== scheduleId);
-          
+
           // If this was the current week schedule, clear it
           if (this.currentWeekSchedule && this.currentWeekSchedule._id === scheduleId) {
             this.currentWeekSchedule = null;
@@ -726,134 +764,113 @@ enhanceSchedulesWithStoreNames(): void {
       }
     });
   }
-  
+
   /**
-   * Modified to return all shifts for admins/managers and only the user's shifts for employees
-   */
-  getVisibleShifts(schedule: Schedule): any[] {
-    if (!schedule || !schedule.shifts || !Array.isArray(schedule.shifts)) return [];
+  * Returns visible shifts based on user role with improved string comparison
+  * to ensure consistent ID matching
+  */
+  getVisibleShifts(schedule: Schedule): ScheduleShift[] {
+    if (!schedule) return [];
+    
+    // Handle MongoDB format shifts - with proper typing
+    let shifts: ScheduleShift[] = [];
+    
+    if (schedule.shifts) {
+      // If it's already an array, use it directly
+      if (Array.isArray(schedule.shifts)) {
+        shifts = schedule.shifts;
+      } 
+      // Handle MongoDB response format (object with numeric keys)
+      else if (typeof schedule.shifts === 'object') {
+        shifts = Object.values(schedule.shifts) as ScheduleShift[];
+      }
+    }
     
     const role = this.permissionService.getRoleIdentifier();
-    const employeeId = this.currentEmployeeId;
-    console.log(`Getting visible shifts for role: ${role}, schedule has ${schedule.shifts.length} shifts, employeeId: ${employeeId}`);
     
     // For admins and managers, show all shifts
     if (role === 'admin' || role === 'manager') {
-      console.log(`Admin/Manager: Showing all ${schedule.shifts.length} shifts`);
-      return schedule.shifts;
+      return shifts;
     }
     
-    // For employees, filter by employee ID
-    if (role === 'employee' && employeeId) {
-      const employeeIdStr = String(employeeId);
-      
-      // Find all shifts for this employee
-      const filteredShifts = schedule.shifts.filter(shift => {
-        if (!shift.employee_id) return false;
-        
-        // Convert both to strings for comparison
-        const shiftEmployeeId = String(shift.employee_id);
-        const matches = shiftEmployeeId === employeeIdStr;
-        
-        // Log matches for debugging
-        if (matches) {
-          console.log(`Found matching shift for day: ${shift.day_of_week}`);
-        }
-        
-        return matches;
+    // For employees, filter to their shifts only
+    if (role === 'employee' && this.currentEmployeeId) {
+      const employeeIdStr = String(this.currentEmployeeId);
+      return shifts.filter(shift => {
+        if (!shift || !shift.employee_id) return false;
+        return String(shift.employee_id) === employeeIdStr;
       });
-      
-      console.log(`Employee ${employeeIdStr}: Found ${filteredShifts.length} of ${schedule.shifts.length} shifts`);
-      
-      // If no shifts found but we know employee should have shifts, try looking for ID in raw format
-      if (filteredShifts.length === 0) {
-        // Check data in its raw format - sometimes IDs might be nested objects
-        const rawShifts = schedule.shifts.filter(shift => {
-          if (!shift.employee_id) return false;
-          
-          // Try to handle if employee_id is an object with $oid
-          const shiftEmpId = typeof shift.employee_id === 'object' && shift.employee_id
-            ? shift.employee_id
-            : String(shift.employee_id);
-            
-          return shiftEmpId === employeeIdStr;
-        });
-        
-        console.log(`After raw check found ${rawShifts.length} shifts`);
-        if (rawShifts.length > 0) return rawShifts;
-      }
-      
-      return filteredShifts;
     }
     
-    return schedule.shifts;
+    return shifts;
   }
-  
+
   getPreviewShifts(shifts: any[]): any[] {
     if (!shifts || !Array.isArray(shifts)) return [];
     return shifts.slice(0, 3);
   }
-  
+
   previousPage(): void {
     if (this.currentPage > 1) {
       this.currentPage--;
       this.loadSchedules();
     }
   }
-  
+
   nextPage(): void {
     if (this.schedules.length === this.pageSize) {
       this.currentPage++;
       this.loadSchedules();
     }
   }
-  
+
   trackByScheduleId(index: number, schedule: Schedule): string {
     return schedule._id || `schedule-${index}`;
   }
-  
+
   formatDate(dateStr: string): string {
     return DateTimeUtils.formatDateForDisplay(dateStr);
   }
-  
+
   formatDateWithTime(dateStr?: string): string {
     if (!dateStr) return '';
-    return DateTimeUtils.formatDateForDisplay(dateStr, { 
-      year: 'numeric', 
+    return DateTimeUtils.formatDateForDisplay(dateStr, {
+      year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
     });
   }
-  
+
   formatShiftTime(timeStr: string): string {
     const [hours, minutes] = timeStr.split(':').map(Number);
     const date = new Date();
     date.setHours(hours, minutes, 0, 0);
     return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
-  
+
   getDayName(day: string): string {
     return day.charAt(0).toUpperCase() + day.slice(1);
   }
 
   /**
- * Get the total shift count for a schedule
- */
+  * Get the total shift count for a schedule, with improved admin/employee handling
+  */
   getShiftCount(schedule: Schedule | null): number {
-    if (!schedule || !Array.isArray(schedule.shifts)) {
-      return 0;
+    if (!schedule) return 0;
+    
+    // Use the shift_count property from the API if available
+    if (schedule.shift_count !== undefined) {
+      return schedule.shift_count;
     }
     
-    if (this.userRole === 'employee' && this.currentEmployeeId) {
-      const employeeIdStr = String(this.currentEmployeeId);
-      return schedule.shifts.filter(shift => 
-        shift && shift.employee_id && String(shift.employee_id) === employeeIdStr
-      ).length;
+    // Fallback to counting shifts array if shift_count is not available
+    if (Array.isArray(schedule.shifts)) {
+      return schedule.shifts.length;
     }
     
-    return schedule.shifts.length;
+    return 0;
   }
 
   /**
@@ -861,42 +878,42 @@ enhanceSchedulesWithStoreNames(): void {
  */
   loadEmployeeScheduleForWeek(weekStartDate: Date): void {
     this.isLoadingWeek = true;
-    
+
     const weekStart = this.getWeekStartDate(weekStartDate);
-    
+
     // Check if this is the current week
     const currentWeekStart = this.getWeekStartDate(new Date());
     this.isCurrentWeek = weekStart.getTime() === currentWeekStart.getTime();
-    
+
     // Format date for API
     const weekStartStr = DateTimeUtils.formatDateForAPI(weekStart);
     console.log(`Loading employee schedule for week starting: ${weekStartStr}`);
-    
+
     // Different approach for employees vs managers/admins
     if (this.userRole === 'employee') {
       // Use the updated hoursService method with week_start_date parameter
       this.hoursService.getMyScheduleShifts(undefined, weekStartStr).subscribe({
         next: (shifts: any[]) => {
           console.log(`Got ${shifts.length} shifts for week starting ${weekStartStr}`);
-          
+
           if (shifts.length === 0) {
             this.currentWeekSchedule = null;
             this.isLoadingWeek = false;
             this.changeDetector.detectChanges();
             return;
           }
-          
+
           // Extract common schedule data from the first shift
           const firstShift = shifts[0];
           const scheduleId = firstShift.schedule_id || '';
           const storeId = firstShift.store_id || '';
           const storeName = firstShift.store_name || '';
           const scheduleTitle = firstShift.schedule_title || 'Weekly Schedule';
-          
+
           // Calculate week end date (6 days after start)
           const weekEnd = new Date(weekStart);
           weekEnd.setDate(weekStart.getDate() + 6);
-          
+
           // Build a Schedule object from the shifts
           this.currentWeekSchedule = {
             _id: scheduleId,
@@ -911,7 +928,7 @@ enhanceSchedulesWithStoreNames(): void {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
-          
+
           this.isLoadingWeek = false;
           this.changeDetector.detectChanges();
         },
@@ -923,31 +940,67 @@ enhanceSchedulesWithStoreNames(): void {
         }
       });
     } else {
-    // For managers/admins, use the regular getSchedules method
-    const options: any = {
-      start_date: weekStartStr,
-      end_date: DateTimeUtils.formatDateForAPI(new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000)),
-      limit: 1
-    };
+      // For managers/admins, use the regular getSchedules method
+      const options: any = {
+        start_date: weekStartStr,
+        end_date: DateTimeUtils.formatDateForAPI(new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000)),
+        limit: 1
+      };
+
+      if (this.storeFilter) {
+        options.store_id = this.storeFilter;
+      }
+
+      this.hoursService.getSchedules(options).subscribe({
+        next: (schedules) => {
+          this.currentWeekSchedule = schedules.length > 0 ? schedules[0] : null;
+          this.isLoadingWeek = false;
+          this.changeDetector.detectChanges();
+        },
+        error: (error: any) => {
+          console.error('Error loading week schedule:', error);
+          this.currentWeekSchedule = null;
+          this.isLoadingWeek = false;
+          this.changeDetector.detectChanges();
+        }
+      });
+    }
+  }
+
+  /**
+ * Debugging function to examine and fix schedule data
+ */
+private fixScheduleData(schedules: any[]): any[] {
+  console.log("Before fix - first schedule:", JSON.stringify(schedules[0]));
+  
+  return schedules.map(schedule => {
+    // Make a copy to avoid mutating the original
+    const fixedSchedule = {...schedule};
     
-    if (this.storeFilter) {
-      options.store_id = this.storeFilter;
+    // Extract and log the raw shifts data to debug
+    console.log("Schedule ID:", fixedSchedule._id);
+    console.log("Shifts type:", typeof fixedSchedule.shifts);
+    console.log("Is array:", Array.isArray(fixedSchedule.shifts));
+    console.log("Raw shifts data:", fixedSchedule.shifts);
+    
+    // Try to fix the shifts property if it exists but isn't an array
+    if (fixedSchedule.shifts && !Array.isArray(fixedSchedule.shifts)) {
+      console.log("Converting shifts to array");
+      
+      // If it's an object with numeric keys, convert to array
+      if (typeof fixedSchedule.shifts === 'object') {
+        fixedSchedule.shifts = Object.values(fixedSchedule.shifts);
+        console.log("After conversion - shifts length:", fixedSchedule.shifts.length);
+      }
     }
     
-    this.hoursService.getSchedules(options).subscribe({
-      next: (schedules) => {
-        this.currentWeekSchedule = schedules.length > 0 ? schedules[0] : null;
-        this.isLoadingWeek = false;
-        this.changeDetector.detectChanges();
-      },
-      error: (error: any) => {
-        console.error('Error loading week schedule:', error);
-        this.currentWeekSchedule = null;
-        this.isLoadingWeek = false;
-        this.changeDetector.detectChanges();
-      }
-    });
-  }
+    // Ensure shifts is at least an empty array
+    if (!fixedSchedule.shifts) {
+      fixedSchedule.shifts = [];
+    }
+    
+    return fixedSchedule;
+  });
 }
 
 }
