@@ -13,6 +13,8 @@ interface NavItem {
   icon: string;
   permission?: string;
   exact?: boolean;
+  children?: NavItem[];
+  expanded?: boolean;
 }
 
 interface NavSection {
@@ -25,24 +27,20 @@ interface NavSection {
   standalone: true,
   imports: [CommonModule, RouterLink, RouterLinkActive, HasPermissionDirective],
   template: `
-    <aside class="bg-slate-800 text-white w-64 shrink-0 hidden lg:block dark:bg-slate-900 flex flex-col h-screen fixed top-16 left-0 z-10 overflow-y-auto">
-      <div class="h-16 flex items-center px-6 border-b border-slate-700 dark:border-slate-800">
-        <h1 class="text-xl font-bold text-white">Store Management</h1>
-      </div>
-      
+    <aside class="bg-slate-800 text-white w-64 shrink-0 hidden lg:block dark:bg-slate-900 flex flex-col h-screen fixed top-16 left-0 z-10 overflow-y-auto"> 
       <!-- User Info Section -->
       <div class="px-3 py-4 border-b border-slate-700 dark:border-slate-800">
-        <div class="flex items-center px-3">
-          <div class="w-8 h-8 rounded-full bg-slate-600 dark:bg-slate-700 flex items-center justify-center text-white font-semibold mr-2">
-            {{ userInitials }}
-          </div>
-          <div>
-            <p class="text-sm font-medium text-white">{{ userName }}</p>
-            <div class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 mt-1">
-              {{ userRole }}
-            </div>
-          </div>
-        </div>
+  <div class="flex items-center px-3">
+    <div class="w-12 h-12 rounded-full bg-slate-600 dark:bg-slate-700 flex items-center justify-center text-white text-lg font-semibold mr-3">
+      {{ userInitials }}
+    </div>
+    <div class="flex flex-col justify-center h-12">
+      <p class="text-sm font-medium text-white leading-tight mb-0.1">{{ userName }}</p>
+      <div class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+        {{ userRole }}
+      </div>
+    </div>
+  </div>
       </div>
       
       <!-- Navigation Links -->

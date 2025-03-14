@@ -1,0 +1,10 @@
+{
+    "name": "SmartStore",
+    "short_name": "SmartStore",
+    "icons": [
+     
+    ],
+    "theme_color": "#7c3aed",
+    "background_color": "#ffffff",
+    "display": "standalone"
+  }

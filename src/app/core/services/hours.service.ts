@@ -811,5 +811,26 @@ private enrichTimesheet(timesheet: any): WeeklyTimesheet {
   // Ensure the timesheet is complete with all required fields
   return TimesheetUtils.ensureComplete(timesheet);
 }
-
+// Add this to your HoursService
+getEmployeeAllSchedules(employeeId: string, options: any = {}): Observable<Schedule[]> {
+  let params = new HttpParams();
+  
+  if (options.start_date) {
+    params = params.set('start_date', options.start_date);
+  }
+  
+  if (options.end_date) {
+    params = params.set('end_date', options.end_date);
+  }
+  
+  if (options.skip !== undefined) {
+    params = params.set('skip', options.skip.toString());
+  }
+  
+  if (options.limit !== undefined) {
+    params = params.set('limit', options.limit.toString());
+  }
+  
+  return this.http.get<Schedule[]>(`/api/v1/schedules/employee/${employeeId}/all`, { params });
+}
 }
