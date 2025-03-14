@@ -12,6 +12,8 @@ import { Store } from '../../../shared/models/store.model';
 import { DateTimeUtils } from '../../../core/utils/date-time-utils.service';
 import { IdUtils } from '../../../core/utils/id-utils.service';
 import { ErrorHandlingService } from '../../../core/utils/error-handling.service';
+import { Payment } from '../../../shared/models/payment.model';
+import { PaymentService } from '../../../core/services/payment.service';
 
 interface EditableDay {
   name: string;
@@ -47,6 +49,8 @@ export class TimesheetDetailComponent implements OnInit {
   
   // No timesheet handling improvement
   noTimesheetMessage = '';
+  payment: Payment | null = null;
+  loadingPayment = false;
   
   constructor(
     private hoursService: HoursService,
@@ -54,7 +58,8 @@ export class TimesheetDetailComponent implements OnInit {
     private authService: AuthService,
     private permissionService: PermissionService,
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
+    private paymentService: PaymentService
   ) {}
   
   ngOnInit(): void {
@@ -108,7 +113,6 @@ export class TimesheetDetailComponent implements OnInit {
    * Enhanced loadCurrentTimesheet method with proper no timesheet handling
    */
   loadCurrentTimesheet(): void {
-    debugger;
     console.log('Loading current timesheet');
     this.hoursService.getCurrentTimesheet().subscribe({
       next: (timesheet) => {
@@ -126,6 +130,11 @@ export class TimesheetDetailComponent implements OnInit {
             if (store) {
               timesheet.store_name = store.name;
             }
+          }
+          
+          // Load payment if this timesheet is associated with one
+          if (timesheet.payment_id) {
+            this.loadPayment(timesheet.payment_id);
           }
         } else {
           // Improved no timesheet handling
@@ -162,6 +171,11 @@ export class TimesheetDetailComponent implements OnInit {
           }
         }
         
+        // Load payment if this timesheet is associated with one
+        if (timesheet.payment_id) {
+          this.loadPayment(timesheet.payment_id);
+        }
+        
         this.loading = false;
       },
       error: (err) => {
@@ -176,6 +190,21 @@ export class TimesheetDetailComponent implements OnInit {
           this.error = ErrorHandlingService.getErrorMessage(err);
         }
         this.loading = false;
+      }
+    });
+  }
+  
+  loadPayment(paymentId: string): void {
+    this.loadingPayment = true;
+    
+    this.paymentService.getPayment(paymentId).subscribe({
+      next: (data) => {
+        this.payment = data;
+        this.loadingPayment = false;
+      },
+      error: (error) => {
+        console.error('Error loading payment', error);
+        this.loadingPayment = false;
       }
     });
   }

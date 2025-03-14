@@ -66,6 +66,12 @@ export const routes: Routes = [
         data: { requiredPermission: 'hours:read' }
       },
       {
+        path: 'payments',
+        loadChildren: () => import('./features/payments/payments.routes').then(m => m.PAYMENT_ROUTES),
+        canActivate: [AuthGuard],
+        data: { requiredPermission: 'payments:read' }
+      },
+      {
         path: 'auth-test',
         loadComponent: () => import('./shared/components/auth-test/auth-test.component').then(m => m.AuthTestComponent)
       },

@@ -1,0 +1,244 @@
+<!-- src/app/features/payments/payment-list/payment-list.component.html -->
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Payment Management</h1>
+    <div class="flex flex-col sm:flex-row gap-4">
+      <button 
+        *ngIf="canWritePayments"
+        routerLink="/payments/generate" 
+        class="btn btn-primary flex items-center"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+        Generate Payments
+      </button>
+      <a 
+        routerLink="/payments/my-payments" 
+        class="btn btn-outline flex items-center"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+        </svg>
+        My Payments
+      </a>
+    </div>
+  </div>
+  
+  <!-- Error Message -->
+  <div *ngIf="error" class="alert alert-danger mb-6">
+    {{ error }}
+    <button (click)="error = ''" class="ml-2">×</button>
+  </div>
+  
+  <!-- Filter Controls -->
+  <div class="card mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="form-group">
+        <label for="employeeFilter" class="form-label">Employee</label>
+        <select 
+          id="employeeFilter" 
+          [(ngModel)]="employeeFilter" 
+          (change)="loadPayments()"
+          class="form-control"
+        >
+          <option value="">All Employees</option>
+          <option *ngFor="let employee of employees" [value]="employee._id">
+            {{ employee.full_name }}
+          </option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label for="storeFilter" class="form-label">Store</label>
+        <select 
+          id="storeFilter" 
+          [(ngModel)]="storeFilter" 
+          (change)="loadPayments()"
+          class="form-control"
+        >
+          <option value="">All Stores</option>
+          <option *ngFor="let store of stores" [value]="store._id">
+            {{ store.name }}
+          </option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label for="statusFilter" class="form-label">Status</label>
+        <select 
+          id="statusFilter" 
+          [(ngModel)]="statusFilter" 
+          (change)="loadPayments()"
+          class="form-control"
+        >
+          <option value="">All Statuses</option>
+          <option [value]="PaymentStatus.PENDING">Pending</option>
+          <option [value]="PaymentStatus.PAID">Paid</option>
+          <option [value]="PaymentStatus.CONFIRMED">Confirmed</option>
+          <option [value]="PaymentStatus.DISPUTED">Disputed</option>
+          <option [value]="PaymentStatus.CANCELLED">Cancelled</option>
+        </select>
+      </div>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+      <div class="form-group">
+        <label for="dateRangeFilter" class="form-label">Date Range</label>
+        <select 
+          id="dateRangeFilter" 
+          [(ngModel)]="dateRangeFilter" 
+          (change)="applyDateRangeFilter()"
+          class="form-control"
+        >
+          <option value="past-month">Past Month</option>
+          <option value="past-3-months">Past 3 Months</option>
+          <option value="past-6-months">Past 6 Months</option>
+          <option value="past-year">Past Year</option>
+          <option value="custom">Custom Range</option>
+        </select>
+      </div>
+      
+      <!-- Custom Date Range -->
+      <div *ngIf="dateRangeFilter === 'custom'" class="form-group">
+        <label for="startDate" class="form-label">Start Date</label>
+        <input 
+          type="date" 
+          id="startDate" 
+          [(ngModel)]="startDate" 
+          (change)="loadPayments()"
+          class="form-control"
+        >
+      </div>
+      
+      <div *ngIf="dateRangeFilter === 'custom'" class="form-group">
+        <label for="endDate" class="form-label">End Date</label>
+        <input 
+          type="date" 
+          id="endDate" 
+          [(ngModel)]="endDate" 
+          (change)="loadPayments()"
+          class="form-control"
+        >
+      </div>
+    </div>
+  </div>
+  
+  <!-- Loading Indicator -->
+  <div *ngIf="loading" class="flex justify-center my-10">
+    <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+  </div>
+  
+  <!-- Payments Table -->
+  <div class="card">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-lg font-semibold">Payments</h2>
+      <div>
+        <span class="badge"
+              [ngClass]="statusFilter === PaymentStatus.PENDING ? 'badge-warning' : 
+                         statusFilter === PaymentStatus.PAID ? 'badge-info' : 
+                         statusFilter === PaymentStatus.CONFIRMED ? 'badge-success' : 
+                         statusFilter === PaymentStatus.DISPUTED ? 'badge-danger' : ''">
+          {{ statusFilter ? (statusFilter | titlecase) : 'All' }}
+        </span>
+      </div>
+    </div>
+    
+    <!-- Empty state -->
+    <div *ngIf="!loading && (!payments || payments.length === 0)" class="text-center py-8 text-[var(--text-secondary)]">
+      No payments found matching your filters.
+    </div>
+    
+    <!-- Payments table -->
+    <div *ngIf="!loading && payments && payments.length > 0" class="overflow-x-auto">
+      <table class="w-full table">
+        <thead>
+          <tr>
+            <th class="table-header">ID</th>
+            <th class="table-header">Employee</th>
+            <th class="table-header">Store</th>
+            <th class="table-header">Period</th>
+            <th class="table-header">Hours</th>
+            <th class="table-header">Amount</th>
+            <th class="table-header">Status</th>
+            <th class="table-header">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let payment of payments; trackBy: trackByPaymentId" class="table-row">
+            <td class="table-cell">{{ formatId(payment._id) }}</td>
+            <td class="table-cell">{{ payment.employee_name || 'Unknown' }}</td>
+            <td class="table-cell">{{ payment.store_name || 'Unknown' }}</td>
+            <td class="table-cell">
+              {{ formatDate(payment.period_start_date) }} - {{ formatDate(payment.period_end_date) }}
+            </td>
+            <td class="table-cell">{{ payment.total_hours }}</td>
+            <td class="table-cell">${{ formatCurrency(payment.gross_amount) }}</td>
+            <td class="table-cell">
+              <span class="badge" [ngClass]="getStatusClass(payment.status)">
+                {{ payment.status | titlecase }}
+              </span>
+            </td>
+            <td class="table-cell">
+              <div class="flex space-x-2">
+                <a [routerLink]="['/payments', payment._id]" class="btn btn-sm btn-outline">
+                  View
+                </a>
+                <button 
+                  *ngIf="payment.status === PaymentStatus.PENDING && canWritePayments"
+                  (click)="processPayment(payment._id)"
+                  class="btn btn-sm btn-success"
+                >
+                  Pay
+                </button>
+                <button 
+                  *ngIf="payment.status === PaymentStatus.PENDING && canWritePayments"
+                  (click)="cancelPayment(payment._id)"
+                  class="btn btn-sm btn-danger"
+                >
+                  Cancel
+                </button>
+                <button 
+                  *ngIf="(payment.status === PaymentStatus.PENDING || payment.status === PaymentStatus.CANCELLED) && canWritePayments"
+                  (click)="deletePayment(payment._id)"
+                  class="btn btn-sm btn-outline"
+                >
+                  Delete
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- Pagination controls -->
+    <div *ngIf="!loading && payments && payments.length > 0" class="flex justify-between items-center mt-6">
+      <div>
+        <span class="text-sm text-[var(--text-secondary)]">
+          Showing {{ payments.length }} of {{ totalPayments }} payments
+        </span>
+      </div>
+      
+      <div class="flex space-x-2">
+        <button 
+          (click)="previousPage()" 
+          class="btn btn-sm btn-outline"
+          [disabled]="currentPage === 1"
+        >
+          Previous
+        </button>
+        <span class="flex items-center px-3">
+          Page {{ currentPage }}
+        </span>
+        <button 
+          (click)="nextPage()" 
+          class="btn btn-sm btn-outline"
+          [disabled]="payments.length < pageSize"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

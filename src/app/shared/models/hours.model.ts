@@ -24,6 +24,7 @@ export interface WeeklyTimesheet {
   // Payment info
   hourly_rate: number;
   total_earnings: number;
+  payment_id?: string; // Added payment ID to link timesheets to payments
   
   // Status tracking
   status: 'draft' | 'submitted' | 'approved' | 'rejected';
@@ -111,6 +112,7 @@ export class TimesheetUtils {
       total_hours,
       hourly_rate,
       total_earnings,
+      payment_id: timesheet.payment_id, // Include payment_id in the completed timesheet
       status: timesheet.status || 'draft',
       submitted_at: timesheet.submitted_at || null,
       approved_at: timesheet.approved_at || null,

@@ -12,6 +12,7 @@ import { PendingApprovalsWidgetComponent } from "./widgets/pending-approvals-wid
 import { AdminStatsWidgetComponent } from "./widgets/admin-stats-widget/admin-stats-widget.component";
 import { RecentActivityWidgetComponent } from "./widgets/recent-activity-widget/recent-activity-widget.component";
 import { SalesStatsWidgetComponent } from "./widgets/sales-stats-widget/sales-stats-widget.component";
+import { PaymentStatsWidgetComponent } from "./widgets/payment-stats-widget/payment-stats-widget.component";
 
 @Component({
   selector: 'app-dashboard',
@@ -26,7 +27,8 @@ import { SalesStatsWidgetComponent } from "./widgets/sales-stats-widget/sales-st
     PendingApprovalsWidgetComponent,
     AdminStatsWidgetComponent,
     RecentActivityWidgetComponent,
-    SalesStatsWidgetComponent
+    SalesStatsWidgetComponent,
+    PaymentStatsWidgetComponent
   ],
   template: `
     <div class="container mx-auto">
@@ -55,20 +57,26 @@ import { SalesStatsWidgetComponent } from "./widgets/sales-stats-widget/sales-st
           <!-- Pending Approvals -->
           <app-pending-approvals-widget></app-pending-approvals-widget>
           
-          <!-- Sales Overview -->
-          <app-sales-stats-widget></app-sales-stats-widget>
+          <!-- Payment Widget -->
+          <app-payment-stats-widget></app-payment-stats-widget>
         </div>
+        
+        <!-- Sales Overview -->
+        <app-sales-stats-widget class="mb-6"></app-sales-stats-widget>
       </ng-container>
       
       <!-- Employee Dashboard View -->
       <ng-container *ngIf="!isAdmin && !isManager">
         <!-- Stats cards for employees -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
           <!-- Timesheet Status -->
           <app-timesheet-stats-widget></app-timesheet-stats-widget>
           
           <!-- Schedule Status -->
           <app-schedule-stats-widget></app-schedule-stats-widget>
+          
+          <!-- Payment Status -->
+          <app-payment-stats-widget></app-payment-stats-widget>
         </div>
         
         <!-- Task overview and pending items -->

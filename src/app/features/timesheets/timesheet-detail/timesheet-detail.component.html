@@ -229,6 +229,57 @@
         </div>
       </div>
       
+      <!-- Payment Information -->
+      <div *ngIf="timesheet?.payment_id" class="mb-6">
+        <h3 class="text-lg font-medium mb-2">Payment Information</h3>
+        <div class="bg-[var(--bg-main)] p-4 rounded-md">
+          <div *ngIf="loadingPayment" class="flex justify-center py-2">
+            <div class="w-6 h-6 border-2 border-t-2 border-primary-500 rounded-full animate-spin"></div>
+          </div>
+          
+          <div *ngIf="!loadingPayment && payment" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <p class="mb-2">
+                <span class="font-medium">Status:</span>
+                <span 
+                  [ngClass]="{
+                    'badge-success': payment.status === 'confirmed',
+                    'badge-warning': payment.status === 'pending' || payment.status === 'paid',
+                    'badge-danger': payment.status === 'disputed',
+                    'badge-info': payment.status === 'cancelled'
+                  }"
+                  class="badge ml-2"
+                >
+                  {{ payment.status | titlecase }}
+                </span>
+              </p>
+              
+              <p *ngIf="payment.payment_date" class="mb-2">
+                <span class="font-medium">Paid On:</span> {{ formatDateTime(payment.payment_date) }}
+              </p>
+              
+              <p *ngIf="payment.confirmation_date" class="mb-2">
+                <span class="font-medium">Confirmed On:</span> {{ formatDateTime(payment.confirmation_date) }}
+              </p>
+              
+              <p class="mb-2">
+                <span class="font-medium">Amount:</span> ${{ payment.gross_amount.toFixed(2) }}
+              </p>
+            </div>
+            
+            <div class="flex items-start justify-end">
+              <a [routerLink]="['/payments', payment._id]" class="btn btn-outline">
+                View Payment Details
+              </a>
+            </div>
+          </div>
+          
+          <div *ngIf="!loadingPayment && !payment" class="text-[var(--text-secondary)] py-2">
+            This timesheet is linked to a payment, but the payment details could not be loaded.
+          </div>
+        </div>
+      </div>
+
       <!-- Action Buttons -->
       <div class="flex justify-end space-x-4">
         <div *ngIf="timesheet.status === 'draft'">
