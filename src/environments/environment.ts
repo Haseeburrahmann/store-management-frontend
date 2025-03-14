@@ -1,5 +1,5 @@
 export const environment = {
   production: false,
-  apiUrl: 'http://localhost:8000', // Your backend API URL
+  apiUrl: 'https://web-production-7f210.up.railway.app', // Update to your Railway URL
   defaultPageSize: 20,
 };
