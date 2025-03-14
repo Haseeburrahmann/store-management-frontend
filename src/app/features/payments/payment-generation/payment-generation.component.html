@@ -1,0 +1,133 @@
+<!-- src/app/features/payments/payment-generation/payment-generation.component.html -->
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Generate Payments</h1>
+    <div class="flex flex-col sm:flex-row gap-4">
+      <button 
+        routerLink="/payments" 
+        class="btn btn-outline flex items-center"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        Back to Payments
+      </button>
+    </div>
+  </div>
+  
+  <!-- Error Message -->
+  <div *ngIf="error" class="alert alert-danger mb-6">
+    {{ error }}
+    <button (click)="error = null" class="ml-2">×</button>
+  </div>
+  
+  <!-- Success Message -->
+  <div *ngIf="success" class="alert alert-success mb-6">
+    <div class="flex items-center">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      Payments generated successfully! Redirecting to payment list...
+    </div>
+  </div>
+  
+  <!-- Generation Form -->
+  <div class="card">
+    <h2 class="text-lg font-semibold mb-4">Payment Generation Options</h2>
+    
+    <div class="text-[var(--text-secondary)] mb-4">
+      <p>Generate payments for the selected pay period. This will process all approved timesheets that have not yet been paid.</p>
+    </div>
+    
+    <form [formGroup]="generationForm" (ngSubmit)="generatePayments()">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <!-- Pay Period Start -->
+        <div class="form-group">
+          <label for="start_date" class="form-label">Pay Period Start</label>
+          <input 
+            type="date" 
+            id="start_date" 
+            formControlName="start_date"
+            class="form-control"
+          >
+          <div *ngIf="hasError('start_date', 'required')" class="form-error">
+            Start date is required
+          </div>
+        </div>
+        
+        <!-- Pay Period End -->
+        <div class="form-group">
+          <label for="end_date" class="form-label">Pay Period End</label>
+          <input 
+            type="date" 
+            id="end_date" 
+            formControlName="end_date"
+            class="form-control"
+          >
+          <div *ngIf="hasError('end_date', 'required')" class="form-error">
+            End date is required
+          </div>
+        </div>
+      </div>
+      
+      <!-- Store Filter (Optional) -->
+      <div class="form-group mb-6">
+        <label for="store_id" class="form-label">Store (Optional)</label>
+        <select 
+          id="store_id" 
+          formControlName="store_id"
+          class="form-control"
+        >
+          <option value="">All Stores</option>
+          <option *ngFor="let store of stores" [value]="store._id">
+            {{ store.name }}
+          </option>
+        </select>
+        <div class="text-sm text-[var(--text-secondary)] mt-1">
+          Leave blank to generate payments for all stores
+        </div>
+      </div>
+      
+      <!-- Summary -->
+      <div class="bg-[var(--bg-main)] p-4 rounded-md mb-6">
+        <h3 class="text-md font-medium mb-2">Payment Generation Summary</h3>
+        <p class="mb-1">
+          <span class="font-medium">Pay Period:</span> 
+          {{ formatDate(generationForm.get('start_date')?.value) }} - 
+          {{ formatDate(generationForm.get('end_date')?.value) }}
+        </p>
+        <p>
+          <span class="font-medium">Store:</span> 
+          {{ generationForm.get('store_id')?.value ? 
+             (getStoreName(generationForm.get('store_id')?.value)) : 
+             'All Stores' }}
+        </p>
+      </div>
+      
+      <!-- Action Buttons -->
+      <div class="flex justify-end space-x-4">
+        <button 
+          type="button"
+          (click)="cancelGeneration()"
+          class="btn btn-outline"
+          [disabled]="loading"
+        >
+          Cancel
+        </button>
+        <button 
+          type="submit"
+          class="btn btn-primary"
+          [disabled]="loading || generationForm.invalid"
+        >
+          <span *ngIf="loading" class="mr-2">
+            <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </span>
+          Generate Payments
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

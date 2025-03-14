@@ -1,0 +1,210 @@
+<!-- src/app/features/payments/payment-confirmation/payment-confirmation.component.html -->
+<div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">{{ isDisputeMode ? 'Dispute Payment' : 'Confirm Payment' }}</h1>
+      <div class="flex flex-col sm:flex-row gap-4">
+        <button 
+          (click)="cancel()" 
+          class="btn btn-outline flex items-center"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back
+        </button>
+      </div>
+    </div>
+    
+    <!-- Error Message -->
+    <div *ngIf="error" class="alert alert-danger mb-6">
+      {{ error }}
+      <button (click)="error = ''" class="ml-2">×</button>
+    </div>
+    
+    <!-- Loading Indicator -->
+    <div *ngIf="loading" class="flex justify-center my-10">
+      <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+    </div>
+    
+    <!-- Confirmation/Dispute Form -->
+    <ng-container *ngIf="!loading && payment">
+      <div class="card">
+        <!-- Payment Summary -->
+        <div class="mb-6">
+          <h2 class="text-lg font-semibold mb-4">
+            Payment Summary
+          </h2>
+          
+          <div class="bg-[var(--bg-main)] rounded-md p-4 mb-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <div class="text-sm text-[var(--text-secondary)]">Payment ID</div>
+                <div class="font-medium">{{ payment._id.substring(0, 8) }}</div>
+              </div>
+              
+              <div>
+                <div class="text-sm text-[var(--text-secondary)]">Pay Period</div>
+                <div>{{ formatDate(payment.period_start_date) }} - {{ formatDate(payment.period_end_date) }}</div>
+              </div>
+              
+              <div>
+                <div class="text-sm text-[var(--text-secondary)]">Payment Date</div>
+                <div>{{ formatDate(payment.payment_date) || 'Not yet paid' }}</div>
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+              <div>
+                <div class="text-sm text-[var(--text-secondary)]">Hours Worked</div>
+                <div>{{ payment.total_hours }} hours</div>
+              </div>
+              
+              <div>
+                <div class="text-sm text-[var(--text-secondary)]">Hourly Rate</div>
+                <div>${{ formatCurrency(payment.hourly_rate) }}</div>
+              </div>
+              
+              <div>
+                <div class="text-sm text-[var(--text-secondary)]">Total Amount</div>
+                <div class="text-xl font-bold">${{ formatCurrency(payment.gross_amount) }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Confirmation Form -->
+        <div *ngIf="!isDisputeMode">
+          <h3 class="text-lg font-medium mb-3">Confirm Payment Receipt</h3>
+          
+          <p class="text-[var(--text-secondary)] mb-4">
+            By confirming receipt, you acknowledge that you have received this payment for the hours worked 
+            during the specified pay period.
+          </p>
+          
+          <div class="form-group mb-6">
+            <label for="confirmationNotes" class="form-label">Notes (Optional)</label>
+            <textarea
+              id="confirmationNotes"
+              [(ngModel)]="confirmationNotes"
+              rows="3"
+              class="form-control w-full"
+              placeholder="Add any notes about this payment..."
+            ></textarea>
+          </div>
+          
+          <div class="flex justify-between">
+            <button
+              type="button"
+              (click)="toggleDisputeMode()"
+              class="btn btn-outline btn-danger"
+            >
+              Need to Dispute?
+            </button>
+            
+            <div class="flex space-x-4">
+              <button
+                type="button"
+                (click)="cancel()"
+                class="btn btn-outline"
+                [disabled]="processing"
+              >
+                Cancel
+              </button>
+              
+              <button
+                type="button"
+                (click)="confirmPayment()"
+                class="btn btn-success"
+                [disabled]="processing"
+              >
+                <span *ngIf="processing" class="mr-2">
+                  <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </span>
+                Confirm Receipt
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Dispute Form -->
+        <div *ngIf="isDisputeMode">
+          <h3 class="text-lg font-medium mb-3">Dispute Payment</h3>
+          
+          <p class="text-[var(--text-secondary)] mb-4">
+            If there is an issue with this payment, please provide details below. 
+            Your payment will be marked as disputed and a manager will review your case.
+          </p>
+          
+          <div class="form-group mb-4">
+            <label for="disputeReason" class="form-label">Reason for Dispute <span class="text-red-500">*</span></label>
+            <select
+              id="disputeReason"
+              [(ngModel)]="disputeReason"
+              class="form-control w-full"
+              required
+            >
+              <option value="" disabled selected>Select a reason</option>
+              <option value="Incorrect Hours">Incorrect Hours</option>
+              <option value="Incorrect Rate">Incorrect Rate</option>
+              <option value="Missing Payment">Missing Payment</option>
+              <option value="Already Received">Already Received</option>
+              <option value="Other">Other</option>
+            </select>
+            <div *ngIf="error && !disputeReason" class="form-error">
+              Please select a reason for the dispute
+            </div>
+          </div>
+          
+          <div class="form-group mb-6">
+            <label for="disputeDetails" class="form-label">Additional Details</label>
+            <textarea
+              id="disputeDetails"
+              [(ngModel)]="disputeDetails"
+              rows="4"
+              class="form-control w-full"
+              placeholder="Please provide any additional details about the issue..."
+            ></textarea>
+          </div>
+          
+          <div class="flex justify-between">
+            <button
+              type="button"
+              (click)="toggleDisputeMode()"
+              class="btn btn-outline"
+            >
+              Back to Confirmation
+            </button>
+            
+            <div class="flex space-x-4">
+              <button
+                type="button"
+                (click)="cancel()"
+                class="btn btn-outline"
+                [disabled]="processing"
+              >
+                Cancel
+              </button>
+              
+              <button
+                type="button"
+                (click)="disputePayment()"
+                class="btn btn-danger"
+                [disabled]="processing || !disputeReason"
+              >
+                <span *ngIf="processing" class="mr-2">
+                  <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </span>
+                Submit Dispute
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+  </div>
