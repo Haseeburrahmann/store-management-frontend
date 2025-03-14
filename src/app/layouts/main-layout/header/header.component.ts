@@ -12,12 +12,13 @@ import { DarkModeToggleComponent } from '../../../shared/components/dark-mode-to
   template: `
     <header class="bg-[var(--bg-card)] shadow-sm z-10 py-3 px-4 sm:px-6 lg:px-8 border-b border-[var(--border-color)]">
       <div class="flex justify-between items-center">
-        <!-- Mobile menu button -->
-        <div class="flex items-center lg:hidden">
+        <!-- Logo and Brand -->
+        <div class="flex items-center">
+          <!-- Mobile menu button -->
           <button 
             type="button" 
             (click)="toggleMobileMenu()"
-            class="text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-slate-500"
+            class="text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500 lg:hidden mr-3"
             aria-expanded="false"
           >
             <span class="sr-only">Open menu</span>
@@ -26,6 +27,52 @@ import { DarkModeToggleComponent } from '../../../shared/components/dark-mode-to
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
+          
+          <!-- Logo -->
+          <div class="flex-shrink-0 flex items-center">
+  <img src="../../../../assets/icons/favicon-32x32.png" alt="SmartStore Logo" class="mr-2">
+  <span class="text-lg font-bold text-[var(--text-primary)] hidden sm:block">SmartStore</span>
+</div>
+          
+          <!-- Desktop Navigation Menu -->
+          <div class="hidden lg:ml-6 lg:flex lg:space-x-4">
+            <a 
+              routerLink="/dashboard" 
+              routerLinkActive="text-indigo-600 dark:text-indigo-400" 
+              [routerLinkActiveOptions]="{exact: true}"
+              class="px-3 py-2 rounded-md text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+            >
+              Dashboard
+            </a>
+            <a 
+              routerLink="/stores" 
+              routerLinkActive="text-indigo-600 dark:text-indigo-400"
+              class="px-3 py-2 rounded-md text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+            >
+              Stores
+            </a>
+            <a 
+              routerLink="/employees" 
+              routerLinkActive="text-indigo-600 dark:text-indigo-400"
+              class="px-3 py-2 rounded-md text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+            >
+              Employees
+            </a>
+            <a 
+              routerLink="/schedules" 
+              routerLinkActive="text-indigo-600 dark:text-indigo-400"
+              class="px-3 py-2 rounded-md text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+            >
+              Schedules
+            </a>
+            <a 
+              routerLink="/timesheets" 
+              routerLinkActive="text-indigo-600 dark:text-indigo-400"
+              class="px-3 py-2 rounded-md text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+            >
+              Timesheets
+            </a>
+          </div>
         </div>
         
         <!-- Search bar -->
@@ -56,7 +103,7 @@ import { DarkModeToggleComponent } from '../../../shared/components/dark-mode-to
           
           <!-- Notification button -->
           <button 
-            class="ml-4 p-1 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500"
+            class="ml-4 p-1 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             [class.animate-pulse]="hasNotifications"
           >
             <span class="sr-only">View notifications</span>
@@ -77,12 +124,12 @@ import { DarkModeToggleComponent } from '../../../shared/components/dark-mode-to
             <div>
               <button 
                 type="button" 
-                class="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500"
+                class="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 id="user-menu-button"
                 (click)="toggleProfileMenu()"
               >
                 <span class="sr-only">Open user menu</span>
-                <div class="h-8 w-8 rounded-full bg-slate-600 dark:bg-slate-700 flex items-center justify-center text-white">
+                <div class="h-8 w-8 rounded-full bg-indigo-600 dark:bg-indigo-700 flex items-center justify-center text-white">
                   {{ userInitials }}
                 </div>
               </button>
@@ -99,7 +146,7 @@ import { DarkModeToggleComponent } from '../../../shared/components/dark-mode-to
             >
               <a 
                 routerLink="/profile" 
-                class="block px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-main)]" 
+                class="block px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)]" 
                 role="menuitem" 
                 tabindex="-1"
               >
@@ -107,7 +154,7 @@ import { DarkModeToggleComponent } from '../../../shared/components/dark-mode-to
               </a>
               <a 
                 routerLink="/dashboard" 
-                class="block px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-main)]" 
+                class="block px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)]" 
                 role="menuitem" 
                 tabindex="-1"
               >
@@ -115,7 +162,7 @@ import { DarkModeToggleComponent } from '../../../shared/components/dark-mode-to
               </a>
               <button 
                 (click)="logout()" 
-                class="block w-full text-left px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-main)]" 
+                class="block w-full text-left px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)]" 
                 role="menuitem" 
                 tabindex="-1"
               >
@@ -131,32 +178,46 @@ import { DarkModeToggleComponent } from '../../../shared/components/dark-mode-to
         <div class="px-2 pt-2 pb-3 space-y-1">
           <a 
             routerLink="/dashboard" 
-            routerLinkActive="bg-slate-100 dark:bg-slate-700 text-[var(--text-primary)]" 
+            routerLinkActive="bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-200" 
             [routerLinkActiveOptions]="{exact: true}"
-            class="block px-3 py-2 rounded-md text-base font-medium text-[var(--text-secondary)] hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-[var(--text-primary)]"
+            class="block px-3 py-2 rounded-md text-base font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
           >
             Dashboard
           </a>
           <a 
             routerLink="/profile" 
-            routerLinkActive="bg-slate-100 dark:bg-slate-700 text-[var(--text-primary)]"
-            class="block px-3 py-2 rounded-md text-base font-medium text-[var(--text-secondary)] hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-[var(--text-primary)]"
+            routerLinkActive="bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-200"
+            class="block px-3 py-2 rounded-md text-base font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
           >
             Profile
           </a>
           <a 
             routerLink="/stores" 
-            routerLinkActive="bg-slate-100 dark:bg-slate-700 text-[var(--text-primary)]"
-            class="block px-3 py-2 rounded-md text-base font-medium text-[var(--text-secondary)] hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-[var(--text-primary)]"
+            routerLinkActive="bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-200"
+            class="block px-3 py-2 rounded-md text-base font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
           >
             Stores
           </a>
           <a 
+            routerLink="/schedules" 
+            routerLinkActive="bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-200"
+            class="block px-3 py-2 rounded-md text-base font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+          >
+            Schedules
+          </a>
+          <a 
             routerLink="/employees" 
-            routerLinkActive="bg-slate-100 dark:bg-slate-700 text-[var(--text-primary)]"
-            class="block px-3 py-2 rounded-md text-base font-medium text-[var(--text-secondary)] hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-[var(--text-primary)]"
+            routerLinkActive="bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-200"
+            class="block px-3 py-2 rounded-md text-base font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
           >
             Employees
+          </a>
+          <a 
+            routerLink="/timesheets" 
+            routerLinkActive="bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-200"
+            class="block px-3 py-2 rounded-md text-base font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+          >
+            Timesheets
           </a>
         </div>
       </div>
@@ -225,6 +286,7 @@ export class HeaderComponent implements OnInit {
     // For now, we're using a placeholder value
     this.notificationCount = 3;
   }
+  
   getCurrentDateTime(): string {
     const now = new Date();
     return now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
