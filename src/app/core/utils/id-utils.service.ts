@@ -27,16 +27,21 @@ export class IdUtils {
   public static createIdParams(params: Record<string, any>): Record<string, string> {
     const result: Record<string, string> = {};
     
+    console.log('Creating ID params from:', params); // Add debugging
+    
     for (const key in params) {
       if (params[key] != null && params[key] !== undefined) {
-        if (key.includes('_id') || key === 'id') {
+        if (key.includes('_id') || key === 'id' || key === 'store_id' || key === 'employee_id') {
+          // Explicitly include store_id and employee_id
           result[key] = this.ensureString(params[key]);
+          console.log(`Processed ID field: ${key} = ${result[key]}`);
         } else {
           result[key] = String(params[key]);
         }
       }
     }
     
+    console.log('Transformed params:', result); // Add debugging
     return result;
   }
 }

@@ -52,16 +52,16 @@
       <div class="form-group">
         <label for="storeFilter" class="form-label">Store</label>
         <select 
-          id="storeFilter" 
-          [(ngModel)]="storeFilter" 
-          (change)="loadPayments()"
-          class="form-control"
-        >
-          <option value="">All Stores</option>
-          <option *ngFor="let store of stores" [value]="store._id">
-            {{ store.name }}
-          </option>
-        </select>
+        id="storeFilter" 
+        [(ngModel)]="storeFilter" 
+        (change)="onStoreFilterChange($event)"
+        class="form-control"
+      >
+        <option value="">All Stores</option>
+        <option *ngFor="let store of stores" [value]="store._id">
+          {{ store.name }}
+        </option>
+      </select>
       </div>
       
       <div class="form-group">
