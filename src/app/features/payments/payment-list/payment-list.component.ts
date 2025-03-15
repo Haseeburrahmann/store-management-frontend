@@ -85,7 +85,6 @@ export class PaymentListComponent implements OnInit {
   }
   
   loadPayments(): void {
-    debugger;
     this.loading = true;
     this.error = '';
     
@@ -96,10 +95,12 @@ export class PaymentListComponent implements OnInit {
     
     if (this.employeeFilter) {
       options.employee_id = this.employeeFilter;
+      console.log('Employee filter applied:', this.employeeFilter);
     }
     
     if (this.storeFilter) {
       options.store_id = this.storeFilter;
+      console.log('Store filter applied:', this.storeFilter);
     }
     
     if (this.statusFilter) {
@@ -114,6 +115,9 @@ export class PaymentListComponent implements OnInit {
       options.end_date = this.endDate;
     }
     
+    console.log('Final raw options:', options);
+  
+
     this.paymentService.getPayments(options).subscribe({
       next: (payments) => {
         this.payments = payments;
@@ -189,6 +193,11 @@ export class PaymentListComponent implements OnInit {
       // If we're on page 1 with no results, there are no results
       this.totalPayments = 0;
     }
+  }
+  
+  onStoreFilterChange(event: any): void {
+    console.log('Store filter changed to:', this.storeFilter, 'Event:', event);
+    this.loadPayments();
   }
   
   applyDateRangeFilter(): void {
