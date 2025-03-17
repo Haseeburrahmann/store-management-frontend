@@ -22,6 +22,12 @@ export const TIMESHEET_ROUTES: Routes = [
     data: { requiredPermission: 'hours:approve' }
   },
   {
+    path: 'create-past',
+    loadComponent: () => import('./past-timesheet-form/past-timesheet-form.component').then(m => m.PastTimesheetFormComponent),
+    canActivate: [AuthGuard],
+    data: { requiredPermission: 'hours:write' }
+  },
+  {
     path: ':id',
     loadComponent: () => import('./timesheet-detail/timesheet-detail.component').then(m => m.TimesheetDetailComponent),
     canActivate: [AuthGuard],

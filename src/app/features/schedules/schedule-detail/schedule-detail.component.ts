@@ -3,7 +3,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { HoursService } from '../../../core/services/hours.service';
+import { HoursService, TimesheetQueryParams } from '../../../core/services/hours.service';
 import { StoreService } from '../../../core/services/store.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PermissionService } from '../../../core/auth/permission.service';
@@ -32,230 +32,279 @@ interface EmployeeShiftResponse extends ScheduleShift {
   standalone: true,
   imports: [CommonModule, RouterLink, FormsModule, HasPermissionDirective],
   template: `
-    <div class="page-container">
-      <div class="page-header">
-        <h1 class="page-title">Schedule Details</h1>
-        <div class="flex flex-col sm:flex-row gap-4">
-          <button 
-            (click)="navigateBack()" 
-            class="btn btn-outline flex items-center"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back
-          </button>
-          
-          <!-- Week Navigation Controls - NEW FEATURE -->
-          <div class="flex gap-2">
-            <button 
-              (click)="navigateToPreviousWeek()" 
-              class="btn btn-outline flex items-center"
-              *ngIf="scheduleId"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-              </svg>
-              Previous Week
-            </button>
-            
-            <button 
-              (click)="navigateToNextWeek()" 
-              class="btn btn-outline flex items-center"
-              *ngIf="scheduleId"
-            >
-              Next Week
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-          
-          <div *appHasPermission="'hours:write'" class="flex gap-2">
-            <a 
-              [routerLink]="['/schedules', scheduleId, 'edit']" 
-              class="btn btn-primary"
-            >
-              Edit Schedule
-            </a>
-            <button 
-              (click)="deleteSchedule()"
-              class="btn btn-danger"
-            >
-              Delete
-            </button>
-          </div>
+   <div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Schedule Details</h1>
+    <div class="flex flex-col sm:flex-row gap-4">
+      <button 
+        (click)="navigateBack()" 
+        class="btn btn-outline flex items-center"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        Back
+      </button>
+      
+      <!-- Week Navigation Controls -->
+      <div class="flex gap-2">
+        <button 
+          (click)="navigateToPreviousWeek()" 
+          class="btn btn-outline flex items-center"
+          *ngIf="scheduleId"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+          Previous Week
+        </button>
+        
+        <button 
+          (click)="navigateToNextWeek()" 
+          class="btn btn-outline flex items-center"
+          *ngIf="scheduleId"
+        >
+          Next Week
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+      
+      <div *appHasPermission="'hours:write'" class="flex gap-2">
+        <a 
+          [routerLink]="['/schedules', scheduleId, 'edit']" 
+          class="btn btn-primary"
+        >
+          Edit Schedule
+        </a>
+        <button 
+          (click)="deleteSchedule()"
+          class="btn btn-danger"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Loading Indicator -->
+  <div *ngIf="loading" class="flex justify-center my-10">
+    <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+  </div>
+  
+  <!-- Error Message -->
+  <div *ngIf="error" class="alert alert-danger mb-6">
+    {{ error }}
+  </div>
+  
+  <!-- Schedule Details -->
+  <div *ngIf="!loading && schedule" class="card mb-6">
+    <div class="flex flex-col md:flex-row justify-between mb-6">
+      <div>
+        <h2 class="text-xl font-semibold">{{ schedule.title }}</h2>
+        <p class="text-[var(--text-secondary)]">
+          {{ formatDate(schedule.week_start_date) }} to {{ formatDate(schedule.week_end_date) }}
+        </p>
+        <p class="mt-2">
+          <span class="font-medium">Store:</span> {{ schedule.store_name }}
+        </p>
+        <!-- Status Badge -->
+        <div class="mt-2">
+  <span [ngClass]="getStatusBadgeClass()">
+    {{ getStatusLabel() }}
+  </span>
+  <span *ngIf="schedule?.status === 'completed' && schedule?.completed_at" class="text-sm text-[var(--text-secondary)] ml-2">
+  Completed {{ formatDateWithTime(schedule.completed_at!) }}
+</span>
+</div>
+      
+      <div class="mt-4 md:mt-0 text-right">
+        <div class="text-sm text-[var(--text-secondary)]">Created</div>
+        <div>{{ formatDateWithTime(schedule.created_at) }}</div>
+        
+        <div class="mt-2">
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+            {{ getTotalShiftCount() }} Shifts
+          </span>
         </div>
       </div>
+    </div>
+
+    <!-- Schedule Status Controls - NEW -->
+    <div *ngIf="canManageSchedule()" class="mb-6 p-4 rounded border border-[var(--border-color)] bg-[var(--bg-main)]">
+      <h3 class="text-lg font-medium mb-3">Schedule Status</h3>
       
-      <!-- Loading Indicator -->
-      <div *ngIf="loading" class="flex justify-center my-10">
-        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+      <div class="flex flex-wrap gap-4 items-center">
+        <!-- Mark as Active Button -->
+        <button 
+          *ngIf="schedule.status !== 'active'"
+          (click)="markScheduleAsActive()" 
+          class="btn btn-sm btn-outline"
+        >
+          Mark as Active
+        </button>
+        
+        <!-- Mark as Completed Button -->
+        <button 
+          *ngIf="schedule.status !== 'completed'"
+          (click)="markScheduleAsCompleted()" 
+          class="btn btn-sm btn-success"
+        >
+          Mark as Completed
+        </button>
+        
+        <!-- Create Timesheet Button (only show when completed) -->
+        <button 
+          *ngIf="schedule.status === 'completed' && !hasExistingTimesheet"
+          (click)="createTimesheetFromSchedule()" 
+          class="btn btn-sm btn-primary"
+        >
+          Create Timesheet
+        </button>
+        
+        <!-- Timesheet Already Exists Message -->
+        <span 
+          *ngIf="schedule.status === 'completed' && hasExistingTimesheet"
+          class="text-sm text-[var(--text-secondary)]"
+        >
+          <span class="font-medium">Note:</span> A timesheet already exists for this schedule
+        </span>
       </div>
-      
-      <!-- Error Message -->
-      <div *ngIf="error" class="alert alert-danger mb-6">
-        {{ error }}
-      </div>
-      
-      <!-- Schedule Details -->
-      <div *ngIf="!loading && schedule" class="card mb-6">
-        <div class="flex flex-col md:flex-row justify-between mb-6">
-          <div>
-            <h2 class="text-xl font-semibold">{{ schedule.title }}</h2>
-            <p class="text-[var(--text-secondary)]">
-              {{ formatDate(schedule.week_start_date) }} to {{ formatDate(schedule.week_end_date) }}
-            </p>
-            <p class="mt-2">
-              <span class="font-medium">Store:</span> {{ schedule.store_name }}
-            </p>
-          </div>
-          
-          <div class="mt-4 md:mt-0 text-right">
-            <div class="text-sm text-[var(--text-secondary)]">Created</div>
-            <div>{{ formatDateWithTime(schedule.created_at) }}</div>
-            
-            <div class="mt-2">
-              <!-- Fixed Admin View - Now correctly shows total shift count -->
-              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                {{ getTotalShiftCount() }} Shifts
-              </span>
-            </div>
-          </div>
+    </div>
+    
+    <!-- Weekly View -->
+    <div class="overflow-x-auto">
+      <table class="min-w-full border-collapse">
+        <thead>
+          <tr>
+            <th class="py-3 px-4 bg-[var(--bg-main)] border border-[var(--border-color)] text-left">Day</th>
+            <th class="py-3 px-4 bg-[var(--bg-main)] border border-[var(--border-color)] text-left">Date</th>
+            <th class="py-3 px-4 bg-[var(--bg-main)] border border-[var(--border-color)] text-left">Shifts</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let day of dailySchedules">
+            <td class="py-3 px-4 border border-[var(--border-color)] align-top font-medium">
+              {{ day.dayName }}
+            </td>
+            <td class="py-3 px-4 border border-[var(--border-color)] align-top">
+              {{ formatDayDate(day.date) }}
+            </td>
+            <td class="py-3 px-4 border border-[var(--border-color)] align-top">
+              <div *ngIf="day.shifts.length === 0" class="text-[var(--text-secondary)] italic">
+                <!-- Show appropriate message based on role -->
+                {{ userRole === 'employee' ? 'No shifts scheduled for you' : 'No shifts scheduled' }}
+              </div>
+              
+              <div *ngFor="let shift of day.shifts" class="mb-2 p-2 bg-[var(--bg-main)] rounded">
+                <div class="flex justify-between">
+                  <div class="font-medium">
+                    <!-- Show proper employee name with (You) indicator -->
+                    {{ shift.employee_name || (isCurrentEmployee(shift.employee_id) ? authService.currentUser?.full_name || 'Current Employee' : 'Unknown Employee') }}
+                    <span *ngIf="isCurrentEmployee(shift.employee_id)" 
+                        class="ml-1 text-xs text-green-600 dark:text-green-400">
+                      (You)
+                    </span>
+                  </div>
+                  <div>{{ formatShiftTime(shift.start_time) }} - {{ formatShiftTime(shift.end_time) }}</div>
+                </div>
+                <div *ngIf="shift.notes" class="mt-1 text-sm text-[var(--text-secondary)] italic">
+                  {{ shift.notes }}
+                </div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- Print/Export Actions -->
+    <div class="mt-6 flex justify-end space-x-4">
+      <button 
+        (click)="printSchedule()" 
+        class="btn btn-outline flex items-center"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+        </svg>
+        Print Schedule
+      </button>
+    </div>
+  </div>
+  
+  <!-- Empty Schedule Message -->
+  <div *ngIf="!loading && schedule && schedule.shifts && schedule.shifts.length === 0" class="card mb-6">
+    <div class="text-center py-8">
+      <h2 class="text-xl font-medium mb-2">No Shifts Scheduled</h2>
+      <p class="text-[var(--text-secondary)] mb-4">
+        This schedule doesn't have any shifts yet.
+      </p>
+      <a 
+        *appHasPermission="'hours:write'"
+        [routerLink]="['/schedules', scheduleId, 'edit']" 
+        class="btn btn-primary"
+      >
+        Add Shifts
+      </a>
+    </div>
+  </div>
+  
+  <!-- Employee Schedule View -->
+  <div *ngIf="!loading && schedule && employeeShifts.length > 0" class="card">
+    <h2 class="text-lg font-semibold mb-4">
+      {{ userRole === 'employee' ? 'Your Schedule Summary' : 'Employee Schedule Summary' }}
+    </h2>
+    
+    <div class="space-y-4">
+      <div *ngFor="let employee of employeeShifts" class="border rounded-lg overflow-hidden">
+        <div class="px-4 py-3 bg-[var(--bg-main)] border-b border-[var(--border-color)]">
+          <h3 class="font-medium">{{ employee.name }}</h3>
         </div>
         
-        <!-- Weekly View -->
-        <div class="overflow-x-auto">
-          <table class="min-w-full border-collapse">
+        <div class="p-4">
+          <table class="min-w-full">
             <thead>
               <tr>
-                <th class="py-3 px-4 bg-[var(--bg-main)] border border-[var(--border-color)] text-left">Day</th>
-                <th class="py-3 px-4 bg-[var(--bg-main)] border border-[var(--border-color)] text-left">Date</th>
-                <th class="py-3 px-4 bg-[var(--bg-main)] border border-[var(--border-color)] text-left">Shifts</th>
+                <th class="text-left">Day</th>
+                <th class="text-left">Hours</th>
+                <th class="text-left">Schedule</th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let day of dailySchedules">
-                <td class="py-3 px-4 border border-[var(--border-color)] align-top font-medium">
-                  {{ day.dayName }}
-                </td>
-                <td class="py-3 px-4 border border-[var(--border-color)] align-top">
-                  {{ formatDayDate(day.date) }}
-                </td>
-                <td class="py-3 px-4 border border-[var(--border-color)] align-top">
-                  <div *ngIf="day.shifts.length === 0" class="text-[var(--text-secondary)] italic">
-                    <!-- Show appropriate message based on role -->
-                    {{ userRole === 'employee' ? 'No shifts scheduled for you' : 'No shifts scheduled' }}
-                  </div>
-                  
-                  <div *ngFor="let shift of day.shifts" class="mb-2 p-2 bg-[var(--bg-main)] rounded">
-                    <div class="flex justify-between">
-                      <div class="font-medium">
-                        <!-- Show proper employee name with (You) indicator -->
-                        {{ shift.employee_name || (isCurrentEmployee(shift.employee_id) ? authService.currentUser?.full_name || 'Current Employee' : 'Unknown Employee') }}
-                        <span *ngIf="isCurrentEmployee(shift.employee_id)" 
-                            class="ml-1 text-xs text-green-600 dark:text-green-400">
-                          (You)
-                        </span>
-                      </div>
-                      <div>{{ formatShiftTime(shift.start_time) }} - {{ formatShiftTime(shift.end_time) }}</div>
-                    </div>
-                    <div *ngIf="shift.notes" class="mt-1 text-sm text-[var(--text-secondary)] italic">
-                      {{ shift.notes }}
-                    </div>
-                  </div>
-                </td>
+              <tr *ngFor="let shift of employee.shifts">
+                <td class="py-2">{{ getDayName(shift.day_of_week) }}</td>
+                <td class="py-2">{{ calculateShiftHours(shift) }} hrs</td>
+                <td class="py-2">{{ formatShiftTime(shift.start_time) }} - {{ formatShiftTime(shift.end_time) }}</td>
+              </tr>
+              <tr class="font-medium">
+                <td class="pt-3">Total</td>
+                <td class="pt-3" colspan="2">{{ calculateTotalHours(employee.shifts) }} hours</td>
               </tr>
             </tbody>
           </table>
         </div>
-        
-        <!-- Print/Export Actions -->
-        <div class="mt-6 flex justify-end space-x-4">
-          <button 
-            (click)="printSchedule()" 
-            class="btn btn-outline flex items-center"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-            </svg>
-            Print Schedule
-          </button>
-        </div>
-      </div>
-      
-      <!-- Empty Schedule Message - NEW FEATURE -->
-      <div *ngIf="!loading && schedule && schedule.shifts && schedule.shifts.length === 0" class="card mb-6">
-        <div class="text-center py-8">
-          <h2 class="text-xl font-medium mb-2">No Shifts Scheduled</h2>
-          <p class="text-[var(--text-secondary)] mb-4">
-            This schedule doesn't have any shifts yet.
-          </p>
-          <a 
-            *appHasPermission="'hours:write'"
-            [routerLink]="['/schedules', scheduleId, 'edit']" 
-            class="btn btn-primary"
-          >
-            Add Shifts
-          </a>
-        </div>
-      </div>
-      
-      <!-- Employee Schedule View - IMPROVED FOR ADMIN VISIBILITY -->
-      <div *ngIf="!loading && schedule && employeeShifts.length > 0" class="card">
-        <h2 class="text-lg font-semibold mb-4">
-          {{ userRole === 'employee' ? 'Your Schedule Summary' : 'Employee Schedule Summary' }}
-        </h2>
-        
-        <div class="space-y-4">
-          <div *ngFor="let employee of employeeShifts" class="border rounded-lg overflow-hidden">
-            <div class="px-4 py-3 bg-[var(--bg-main)] border-b border-[var(--border-color)]">
-              <h3 class="font-medium">{{ employee.name }}</h3>
-            </div>
-            
-            <div class="p-4">
-              <table class="min-w-full">
-                <thead>
-                  <tr>
-                    <th class="text-left">Day</th>
-                    <th class="text-left">Hours</th>
-                    <th class="text-left">Schedule</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let shift of employee.shifts">
-                    <td class="py-2">{{ getDayName(shift.day_of_week) }}</td>
-                    <td class="py-2">{{ calculateShiftHours(shift) }} hrs</td>
-                    <td class="py-2">{{ formatShiftTime(shift.start_time) }} - {{ formatShiftTime(shift.end_time) }}</td>
-                  </tr>
-                  <tr class="font-medium">
-                    <td class="pt-3">Total</td>
-                    <td class="pt-3" colspan="2">{{ calculateTotalHours(employee.shifts) }} hours</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- No Schedule Found -->
-      <div *ngIf="!loading && !schedule && !error" class="card">
-        <div class="text-center py-8">
-          <h2 class="text-xl font-medium mb-2">Schedule Not Found</h2>
-          <p class="text-[var(--text-secondary)] mb-4">
-            The requested schedule could not be found.
-          </p>
-          
-          <a 
-            routerLink="/schedules" 
-            class="btn btn-primary"
-          >
-            View All Schedules
-          </a>
-        </div>
       </div>
     </div>
+  </div>
+  
+  <!-- No Schedule Found -->
+  <div *ngIf="!loading && !schedule && !error" class="card">
+    <div class="text-center py-8">
+      <h2 class="text-xl font-medium mb-2">Schedule Not Found</h2>
+      <p class="text-[var(--text-secondary)] mb-4">
+        The requested schedule could not be found.
+      </p>
+      
+      <a 
+        routerLink="/schedules" 
+        class="btn btn-primary"
+      >
+        View All Schedules
+      </a>
+    </div>
+  </div>
+</div>
   `
 })
 export class ScheduleDetailComponent implements OnInit {
@@ -271,6 +320,9 @@ export class ScheduleDetailComponent implements OnInit {
   // User info
   currentEmployeeId: string | null = null;
   userRole: 'admin' | 'manager' | 'employee' | 'unknown' = 'unknown';
+  
+  // Track if this schedule already has a timesheet
+  hasExistingTimesheet = false;
 
   constructor(
     private hoursService: HoursService,
@@ -359,6 +411,10 @@ export class ScheduleDetailComponent implements OnInit {
 
         this.organizeDailySchedules();
         this.organizeEmployeeShifts();
+        
+        // Check if a timesheet already exists for this schedule
+        this.checkExistingTimesheet();
+        
         this.loading = false;
       },
       error: (err) => {
@@ -368,9 +424,127 @@ export class ScheduleDetailComponent implements OnInit {
       }
     });
   }
+  
+  /**
+ * Check if a timesheet already exists for this schedule
+ */
+/**
+ * Check if a timesheet already exists for this schedule
+ */
+checkExistingTimesheet(): void {
+  if (!this.schedule || !this.schedule._id) return;
+  
+  // Create a properly typed parameter object
+  const params: TimesheetQueryParams = {
+    schedule_id: this.schedule._id
+  };
+  
+  this.hoursService.getTimesheets(params).subscribe({
+    next: (timesheets) => {
+      this.hasExistingTimesheet = timesheets.length > 0;
+      console.log(`Schedule ${this.schedule?._id} has existing timesheet: ${this.hasExistingTimesheet}`);
+    },
+    error: (err) => {
+      console.error('Error checking for existing timesheets:', err);
+    }
+  });
+}
+  
+  /**
+   * Mark the current schedule as completed
+   */
+  markScheduleAsCompleted(): void {
+    if (!this.schedule || !this.schedule._id) {
+      this.error = 'Cannot complete: Invalid schedule';
+      return;
+    }
+    
+    this.loading = true;
+    
+    this.hoursService.markScheduleAsCompleted(this.schedule._id).subscribe({
+      next: (updatedSchedule) => {
+        this.schedule = updatedSchedule;
+        this.fullSchedule = updatedSchedule;
+        this.loading = false;
+        console.log('Schedule marked as completed:', updatedSchedule);
+      },
+      error: (err) => {
+        console.error('Error marking schedule as completed:', err);
+        this.error = 'Failed to complete schedule: ' + err.message;
+        this.loading = false;
+      }
+    });
+  }
+  
+  /**
+   * Mark the current schedule as active (in progress)
+   */
+  markScheduleAsActive(): void {
+    if (!this.schedule || !this.schedule._id) {
+      this.error = 'Cannot update: Invalid schedule';
+      return;
+    }
+    
+    this.loading = true;
+    
+    this.hoursService.markScheduleAsActive(this.schedule._id).subscribe({
+      next: (updatedSchedule) => {
+        this.schedule = updatedSchedule;
+        this.fullSchedule = updatedSchedule;
+        this.loading = false;
+        console.log('Schedule marked as active:', updatedSchedule);
+      },
+      error: (err) => {
+        console.error('Error marking schedule as active:', err);
+        this.error = 'Failed to update schedule: ' + err.message;
+        this.loading = false;
+      }
+    });
+  }
+  
+  /**
+   * Create a timesheet from this completed schedule
+   */
+  /**
+ * Create a timesheet from this completed schedule
+ */
+createTimesheetFromSchedule(): void {
+  if (!this.schedule || !this.schedule._id) {
+    this.error = 'Cannot create timesheet: Invalid schedule';
+    return;
+  }
+  
+  if (this.schedule.status !== 'completed') {
+    this.error = 'Schedule must be marked as completed before creating a timesheet';
+    return;
+  }
+  
+  this.loading = true;
+  
+  // Safely pass the schedule ID
+  this.hoursService.createTimesheetFromSchedule(this.schedule._id).subscribe({
+    next: (timesheet) => {
+      this.loading = false;
+      console.log('Timesheet created from schedule:', timesheet);
+      
+      // Navigate to the new timesheet if it has an ID
+      if (timesheet._id) {
+        this.router.navigate(['/timesheets', timesheet._id]);
+      } else {
+        // Handle case where timesheet doesn't have an ID (shouldn't happen)
+        this.error = 'Created timesheet has no ID';
+      }
+    },
+    error: (err) => {
+      console.error('Error creating timesheet from schedule:', err);
+      this.error = 'Failed to create timesheet: ' + err.message;
+      this.loading = false;
+    }
+  });
+}
 
   /**
-   * Navigate to previous week's schedule - NEW FEATURE
+   * Navigate to previous week's schedule
    */
   navigateToPreviousWeek(): void {
     if (!this.schedule || !this.schedule.week_start_date) return;
@@ -383,7 +557,7 @@ export class ScheduleDetailComponent implements OnInit {
   }
 
   /**
-   * Navigate to next week's schedule - NEW FEATURE
+   * Navigate to next week's schedule
    */
   navigateToNextWeek(): void {
     if (!this.schedule || !this.schedule.week_start_date) return;
@@ -396,7 +570,7 @@ export class ScheduleDetailComponent implements OnInit {
   }
 
   /**
-   * Find a schedule for a specific week and navigate to it - NEW FEATURE
+   * Find a schedule for a specific week and navigate to it
    */
   findAndNavigateToWeek(weekStart: Date): void {
     // Format date for API
@@ -465,8 +639,8 @@ export class ScheduleDetailComponent implements OnInit {
   }
 
   /**
- * Organize employee shifts to correctly display data for both admin and employee views
- */
+   * Organize employee shifts to correctly display data for both admin and employee views
+   */
   organizeEmployeeShifts(): void {
     if (!this.schedule) return;
 
@@ -575,8 +749,8 @@ export class ScheduleDetailComponent implements OnInit {
   }
 
   /**
- * Get the total shift count properly for both admin and employee views
- */
+   * Get the total shift count properly for both admin and employee views
+   */
   getTotalShiftCount(): number {
     if (this.userRole === 'admin' || this.userRole === 'manager') {
       // Admin and manager should see count of all shifts
@@ -586,7 +760,67 @@ export class ScheduleDetailComponent implements OnInit {
       return this.getVisibleShifts().length || 0;
     }
   }
-
+  
+  /**
+   * Check if the current user has permission to manage the schedule status
+   */
+  canManageSchedule(): boolean {
+    if (this.userRole === 'admin') {
+      // Admins can always manage schedules
+      return true;
+    }
+    
+    if (this.userRole === 'manager' && this.schedule) {
+      // Managers can only manage schedules for their assigned stores
+      const currentUser = this.authService.currentUser;
+      const store = this.schedule.store_id;
+      
+      // This is a simplified check - ideally there would be a proper check for store assignment
+      return this.permissionService.hasPermission('hours:approve');
+    }
+    
+    // Employees can't manage schedules
+    return false;
+  }
+  
+  /**
+   * Get appropriate CSS classes for the status badge
+   */
+  getStatusBadgeClass(): string {
+    if (!this.schedule) return '';
+    
+    const baseClasses = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium';
+    
+    switch (this.schedule.status) {
+      case 'completed':
+        return `${baseClasses} bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200`;
+      case 'active':
+        return `${baseClasses} bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200`;
+      case 'pending':
+      default:
+        return `${baseClasses} bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200`;
+    }
+  }
+  
+  /**
+   * Get a human-readable label for the schedule status
+   */
+  /**
+ * Get a human-readable label for the schedule status
+ */
+getStatusLabel(): string {
+  if (!this.schedule || !this.schedule.status) return 'Pending';
+  
+  switch (this.schedule.status) {
+    case 'completed':
+      return 'Completed';
+    case 'active':
+      return 'In Progress';
+    case 'pending':
+    default:
+      return 'Pending';
+  }
+}
   // Helper methods
   getDayName(day: string): string {
     return day.charAt(0).toUpperCase() + day.slice(1);
@@ -619,8 +853,8 @@ export class ScheduleDetailComponent implements OnInit {
   }
 
   /**
- * Returns shifts based on user role - Enhanced for Admin View
- */
+   * Returns shifts based on user role - Enhanced for Admin View
+   */
   getVisibleShifts(): ScheduleShift[] {
     if (!this.schedule || !this.schedule.shifts || !Array.isArray(this.schedule.shifts)) {
       return [];
