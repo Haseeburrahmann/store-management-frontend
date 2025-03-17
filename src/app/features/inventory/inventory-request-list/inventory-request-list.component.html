@@ -1,0 +1,194 @@
+<!-- src/app/features/inventory/inventory-request-list/inventory-request-list.component.html -->
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Inventory Requests</h1>
+    <div class="flex flex-col sm:flex-row gap-4">
+      <button 
+        *ngIf="canCreateRequests"
+        routerLink="/inventory/create" 
+        class="btn btn-primary flex items-center"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+        </svg>
+        New Request
+      </button>
+    </div>
+  </div>
+  
+  <!-- Error Message -->
+  <div *ngIf="error" class="alert alert-danger mb-6">
+    {{ error }}
+    <button (click)="error = ''" class="ml-2">×</button>
+  </div>
+  
+  <!-- Filter Controls -->
+  <div class="card mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="form-group">
+        <label for="statusFilter" class="form-label">Status</label>
+        <select 
+          id="statusFilter" 
+          [(ngModel)]="statusFilter" 
+          (change)="onStatusFilterChange()"
+          class="form-control"
+        >
+          <option value="">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="fulfilled">Fulfilled</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+      
+      <div class="form-group" *ngIf="permissionService.isAdmin() || permissionService.isManager()">
+        <label for="storeFilter" class="form-label">Store</label>
+        <select 
+          id="storeFilter" 
+          [(ngModel)]="storeFilter" 
+          (change)="onStoreFilterChange()"
+          class="form-control"
+        >
+          <option value="">All Stores</option>
+          <option *ngFor="let store of stores" [value]="store._id">
+            {{ store.name }}
+          </option>
+        </select>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Loading Indicator -->
+  <div *ngIf="loading" class="flex justify-center my-10">
+    <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+  </div>
+  
+  <!-- Empty State -->
+  <div *ngIf="!loading && inventoryRequests.length === 0" class="card">
+    <div class="text-center py-10">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-[var(--text-secondary)] mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+      </svg>
+      <h3 class="text-lg font-medium mb-2">No Inventory Requests</h3>
+      <p class="text-[var(--text-secondary)] mb-4">There are no inventory requests matching your criteria.</p>
+      <button 
+        *ngIf="canCreateRequests"
+        routerLink="/inventory/create" 
+        class="btn btn-primary"
+      >
+        Create New Request
+      </button>
+    </div>
+  </div>
+  
+  <!-- Inventory Requests List -->
+  <div *ngIf="!loading && inventoryRequests.length > 0">
+    <div class="grid grid-cols-1 gap-4">
+      <div 
+        *ngFor="let request of inventoryRequests; trackBy: trackByRequestId" 
+        class="card"
+      >
+        <div class="bg-[var(--bg-card)] rounded-lg overflow-hidden border border-[var(--border-color)]">
+          <!-- Header -->
+          <div class="px-4 py-3 border-b border-[var(--border-color)] flex justify-between items-center">
+            <div>
+              <h3 class="text-lg font-medium">Request from {{ request?.employee_name || 'Unknown Employee' }}</h3>
+              <p class="text-sm text-[var(--text-secondary)]">
+                {{ request?.store_name || getStoreName(request?.store_id || '') }} - Created on {{ formatDate(request?.created_at || '') }}
+              </p>
+            </div>
+            <div class="flex items-center">
+              <span class="badge mr-2" [ngClass]="getStatusBadgeClass(request?.status || '')">
+                {{ request?.status | titlecase }}
+              </span>
+              <a 
+                [routerLink]="['/inventory', request?._id]" 
+                class="btn btn-sm btn-outline"
+              >
+                View Details
+              </a>
+            </div>
+          </div>
+          
+          <!-- Items Preview -->
+          <div class="p-4">
+            <h4 class="text-sm font-medium mb-2">
+              Requested Items ({{ request.item_count || getItemsCount(request) }})
+            </h4>
+            <ul class="space-y-1 text-sm">
+              <ng-container *ngIf="request.items && request.items.length > 0">
+                <li *ngFor="let item of getItemsSlice(request, 0, 3)" class="flex justify-between">
+                  <span>{{ item?.name }}</span>
+                  <span class="font-medium">{{ item?.quantity }} {{ item?.unit_type }}(s)</span>
+                </li>
+                <li *ngIf="hasMoreItems(request, 3)" class="text-[var(--text-secondary)]">
+                  ...and {{ getAdditionalItemsCount(request, 3) }} more items
+                </li>
+              </ng-container>
+              <ng-container *ngIf="!request.items || request.items.length === 0">
+                <li class="text-[var(--text-secondary)]">
+                  {{ request.item_count || 0 }} items (details available in list view)
+                </li>
+              </ng-container>
+            </ul>
+          </div>
+          
+          <!-- Actions -->
+          <div *ngIf="request?.status === 'pending'" class="px-4 py-3 bg-[var(--bg-main)] border-t border-[var(--border-color)]">
+            <div class="flex justify-end gap-2">
+              <button 
+                *ngIf="canApproveRequests"
+                (click)="fulfillRequest(request?._id || '')" 
+                class="btn btn-sm btn-success"
+              >
+                Fulfill Request
+              </button>
+              <button 
+                (click)="cancelRequest(request?._id || '')" 
+                class="btn btn-sm btn-danger"
+              >
+                Cancel Request
+              </button>
+            </div>
+          </div>
+          
+          <!-- Fulfillment Info -->
+          <div *ngIf="request?.status === 'fulfilled'" class="px-4 py-3 bg-[var(--bg-main)] border-t border-[var(--border-color)]">
+            <p class="text-sm text-[var(--text-secondary)]">
+              Fulfilled on {{ formatDate(request?.fulfilled_at || '') }} 
+              <span *ngIf="request?.fulfilled_by_name">by {{ request?.fulfilled_by_name }}</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Pagination -->
+    <div *ngIf="totalRequests > pageSize" class="flex justify-between items-center mt-6">
+      <div>
+        <span class="text-sm text-[var(--text-secondary)]">
+          Showing {{ inventoryRequests.length || 0 }} of {{ totalRequests }} requests
+        </span>
+      </div>
+      
+      <div class="flex space-x-2">
+        <button 
+          (click)="previousPage()" 
+          class="btn btn-sm btn-outline"
+          [disabled]="currentPage === 1"
+        >
+          Previous
+        </button>
+        <span class="flex items-center px-3">
+          Page {{ currentPage }}
+        </span>
+        <button 
+        (click)="nextPage()" 
+        class="btn btn-sm btn-outline"
+        [disabled]="isNextPageDisabled()"
+      >
+        Next
+      </button>
+      </div>
+    </div>
+  </div>
+</div>

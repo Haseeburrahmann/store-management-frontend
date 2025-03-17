@@ -1,0 +1,142 @@
+<!-- src/app/features/inventory/inventory-request-detail/inventory-request-detail.component.html -->
+<div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">Inventory Request Details</h1>
+      <div class="flex flex-col sm:flex-row gap-4">
+        <button 
+          (click)="goBack()" 
+          class="btn btn-outline flex items-center"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back to Requests
+        </button>
+        <button 
+          (click)="printRequest()" 
+          class="btn btn-outline flex items-center"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+          </svg>
+          Print Request
+        </button>
+      </div>
+    </div>
+    
+    <!-- Error Message -->
+    <div *ngIf="error" class="alert alert-danger mb-6">
+      {{ error }}
+      <button (click)="error = ''" class="ml-2">×</button>
+    </div>
+    
+    <!-- Loading Indicator -->
+    <div *ngIf="loading" class="flex justify-center my-10">
+      <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+    </div>
+    
+    <div *ngIf="!loading && inventoryRequest" id="printSection">
+      <!-- Request Header -->
+      <div class="card mb-6">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
+          <div>
+            <div class="flex items-center">
+              <h2 class="text-xl font-semibold mr-3">Request #{{ inventoryRequest._id.substring(0, 8) }}</h2>
+              <span class="badge" [ngClass]="getStatusBadgeClass(inventoryRequest.status)">
+                {{ inventoryRequest.status | titlecase }}
+              </span>
+            </div>
+            <p class="text-[var(--text-secondary)] mt-1">
+              Created on {{ formatDate(inventoryRequest.created_at) }}
+            </p>
+          </div>
+          
+          <div class="mt-4 md:mt-0">
+            <p class="font-medium">{{ inventoryRequest.store_name }}</p>
+            <p class="text-[var(--text-secondary)]">
+              Requested by: {{ inventoryRequest.employee_name }}
+            </p>
+          </div>
+        </div>
+        
+        <!-- Request Notes (if any) -->
+        <div *ngIf="inventoryRequest.notes" class="mb-6">
+          <h3 class="text-lg font-medium mb-2">Request Notes</h3>
+          <div class="bg-[var(--bg-main)] p-4 rounded-md">
+            {{ inventoryRequest.notes }}
+          </div>
+        </div>
+        
+        <!-- Items Table -->
+        <h3 class="text-lg font-medium mb-3">Requested Items</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full table">
+            <thead>
+              <tr>
+                <th class="table-header">Item Name</th>
+                <th class="table-header">Quantity</th>
+                <th class="table-header">Unit Type</th>
+                <th class="table-header">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of inventoryRequest.items" class="table-row">
+                <td class="table-cell">{{ item.name }}</td>
+                <td class="table-cell text-center">{{ item.quantity }}</td>
+                <td class="table-cell">{{ item.unit_type }}</td>
+                <td class="table-cell">{{ item.notes || '-' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- Fulfillment Info (if fulfilled) -->
+        <div *ngIf="inventoryRequest.status === 'fulfilled'" class="mt-6">
+          <h3 class="text-lg font-medium mb-2">Fulfillment Details</h3>
+          <div class="bg-[var(--bg-main)] p-4 rounded-md">
+            <p>
+              <span class="font-medium">Fulfilled on:</span> {{ formatDate(inventoryRequest.fulfilled_at || '') }}
+            </p>
+            <p *ngIf="inventoryRequest.fulfilled_by_name">
+              <span class="font-medium">Fulfilled by:</span> {{ inventoryRequest.fulfilled_by_name }}
+            </p>
+          </div>
+        </div>
+        
+        <!-- Action Buttons (for pending requests) -->
+        <div *ngIf="inventoryRequest.status === 'pending'" class="mt-6">
+          <div *ngIf="canApproveRequests" class="mb-4">
+            <h3 class="text-lg font-medium mb-2">Fulfillment</h3>
+            <div class="form-group mb-4">
+              <label for="fulfillmentNotes" class="form-label">Fulfillment Notes (Optional)</label>
+              <textarea
+                id="fulfillmentNotes"
+                [(ngModel)]="fulfillmentNotes"
+                class="form-control"
+                rows="3"
+                placeholder="Add any notes about the fulfillment..."
+              ></textarea>
+            </div>
+          </div>
+          
+          <div class="flex justify-end gap-2">
+            <button 
+              *ngIf="canApproveRequests"
+              (click)="fulfillRequest()" 
+              class="btn btn-success"
+            >
+              Mark as Fulfilled
+            </button>
+            
+            <button 
+              *ngIf="isOwnRequest || canApproveRequests"
+              (click)="cancelRequest()" 
+              class="btn btn-danger"
+            >
+              Cancel Request
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>

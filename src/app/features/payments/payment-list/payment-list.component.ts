@@ -1,7 +1,7 @@
 // src/app/features/payments/payment-list/payment-list.component.ts
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { PaymentService } from '../../../core/services/payment.service';
 import { StoreService } from '../../../core/services/store.service';
@@ -13,6 +13,7 @@ import { DateTimeUtils } from '../../../core/utils/date-time-utils.service';
 import { HasPermissionDirective } from '../../../shared/directives/has-permission.directive';
 import { PermissionService } from '../../../core/auth/permission.service';
 import { forkJoin } from 'rxjs';
+import { AuthService } from '../../../core/auth/auth.service';
 
 @Component({
   selector: 'app-payment-list',
@@ -50,10 +51,18 @@ export class PaymentListComponent implements OnInit {
     private paymentService: PaymentService,
     private storeService: StoreService,
     private employeeService: EmployeeService,
-    private permissionService: PermissionService
+    private permissionService: PermissionService,
+    private router: Router,
+    private authService : AuthService
   ) {}
   
   ngOnInit(): void {
+
+    if (this.permissionService.isEmployee() && !this.permissionService.hasPermission('payments:write')) {
+      console.log('Employee detected, redirecting to My Payments');
+      this.router.navigate(['/payments/my-payments']);
+      return;
+    }
     this.loadInitialData();
   }
   
@@ -93,6 +102,7 @@ export class PaymentListComponent implements OnInit {
       limit: this.pageSize
     };
     
+    // Apply filters from UI
     if (this.employeeFilter) {
       options.employee_id = this.employeeFilter;
       console.log('Employee filter applied:', this.employeeFilter);
@@ -115,9 +125,39 @@ export class PaymentListComponent implements OnInit {
       options.end_date = this.endDate;
     }
     
+    // If manager, only show payments for their store
+    if (this.permissionService.isManager() && !this.permissionService.isAdmin()) {
+      const user = this.authService.currentUser;
+      if (user) {
+        // Find employee record for this manager to get store ID
+        this.employeeService.getEmployeeByUserId(user._id).subscribe({
+          next: (employee) => {
+            if (employee && employee.store_id) {
+              // Override store filter with manager's store
+              this.storeFilter = employee.store_id;
+              options.store_id = employee.store_id;
+              this.getPaymentsWithOptions(options);
+            } else {
+              this.loading = false;
+              this.error = 'Could not determine your store assignment.';
+            }
+          },
+          error: (err) => {
+            console.error('Error getting employee record:', err);
+            this.loading = false;
+            this.error = 'Failed to determine your store assignment.';
+          }
+        });
+        return; // Early return since we're handling this in the subscription
+      }
+    }
+    
+    // For admin or if manager store resolution failed, proceed with regular options
     console.log('Final raw options:', options);
+    this.getPaymentsWithOptions(options);
+  }
   
-
+  getPaymentsWithOptions(options: any): void {
     this.paymentService.getPayments(options).subscribe({
       next: (payments) => {
         this.payments = payments;
@@ -138,7 +178,7 @@ export class PaymentListComponent implements OnInit {
       }
     });
   }
-  
+
   /**
    * Manually enhance payments with store and employee info
    * This ensures we always have store names displayed

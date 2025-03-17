@@ -1,0 +1,12 @@
+@media print {
+    // Hide elements that shouldn't be printed
+    .page-header, button, .alert, .no-print {
+      display: none !important;
+    }
+    
+    // Ensure the content is visible
+    .card {
+      box-shadow: none;
+      border: 1px solid #ddd;
+    }
+  }
