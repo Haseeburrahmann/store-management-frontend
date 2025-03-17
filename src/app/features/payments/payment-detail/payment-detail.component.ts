@@ -1,11 +1,12 @@
 // src/app/features/payments/payment-detail/payment-detail.component.ts
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { PaymentService } from '../../../core/services/payment.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PermissionService } from '../../../core/auth/permission.service';
+import { EmployeeService } from '../../../core/services/employee.service';
 import { Payment, PaymentStatus, PaymentUtils } from '../../../shared/models/payment.model';
 import { DateTimeUtils } from '../../../core/utils/date-time-utils.service';
 import { WeeklyTimesheet } from '../../../shared/models/hours.model';
@@ -14,7 +15,7 @@ import { HasPermissionDirective } from '../../../shared/directives/has-permissio
 @Component({
   selector: 'app-payment-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, HasPermissionDirective],
+  imports: [CommonModule, FormsModule],
   templateUrl: './payment-detail.component.html'
 })
 export class PaymentDetailComponent implements OnInit {
@@ -22,6 +23,9 @@ export class PaymentDetailComponent implements OnInit {
   loading = true;
   error = '';
   notes = '';
+  
+  // Property to store current user's employee ID
+  currentUserEmployeeId: string | null = null;
   
   // Permission helpers
   PaymentStatus = PaymentStatus;
@@ -34,10 +38,32 @@ export class PaymentDetailComponent implements OnInit {
     private router: Router,
     private paymentService: PaymentService,
     private authService: AuthService,
-    private permissionService: PermissionService
+    private permissionService: PermissionService,
+    private employeeService: EmployeeService,
+    private cdr: ChangeDetectorRef
   ) {}
   
   ngOnInit(): void {
+    // Get current user's employee ID right away
+    if (this.authService.currentUser) {
+      this.employeeService.getEmployeeByUserId(this.authService.currentUser._id)
+        .subscribe({
+          next: (employee) => {
+            if (employee) {
+              console.log('Found employee record for current user:', employee._id);
+              this.currentUserEmployeeId = employee._id;
+              // Force change detection to update the UI if needed
+              this.cdr.detectChanges();
+            } else {
+              console.log('No employee record found for current user');
+            }
+          },
+          error: (err) => {
+            console.error('Error fetching employee record for current user:', err);
+          }
+        });
+    }
+    
     this.loadPayment();
   }
   
@@ -54,8 +80,10 @@ export class PaymentDetailComponent implements OnInit {
         this.payment = payment;
         this.notes = payment.notes || '';
         
-        // If this includes timesheet details, we would process them here
-        console.log(`Loaded payment ${payment._id} with status ${payment.status}`);
+        console.log(`Loaded payment ${payment._id} with status ${payment.status}, employee_id: ${payment.employee_id}`);
+        
+        // Check if we can show controls
+        console.log('Payment belongs to current user:', this.isOwnPayment);
         
         this.loading = false;
       },
@@ -69,7 +97,33 @@ export class PaymentDetailComponent implements OnInit {
   
   get isOwnPayment(): boolean {
     if (!this.payment || !this.authService.currentUser) return false;
-    return this.payment.employee_id === this.authService.currentUser._id;
+    
+    const currentUserId = this.authService.currentUser._id;
+    
+    // First check if the payment has employee_id that matches currentUser._id
+    if (this.payment.employee_id === currentUserId) {
+      console.log('Payment matches user ID directly');
+      return true;
+    }
+    
+    // Check if the payment employee_id matches the user's employee record
+    if (this.currentUserEmployeeId && this.payment.employee_id === this.currentUserEmployeeId) {
+      console.log('Payment matches employee ID');
+      return true;
+    }
+    
+    // If we don't have the employee ID yet, log for debugging
+    if (!this.currentUserEmployeeId) {
+      console.log('Employee ID not yet available for user', currentUserId);
+    } else {
+      console.log(
+        'Payment employee_id', this.payment.employee_id, 
+        'does not match user_id', currentUserId, 
+        'or employee_id', this.currentUserEmployeeId
+      );
+    }
+    
+    return false;
   }
   
   get canManagePayments(): boolean {

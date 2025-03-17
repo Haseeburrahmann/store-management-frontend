@@ -155,9 +155,17 @@
               <a 
                 *ngIf="payment.status === PaymentStatus.PAID"
                 [routerLink]="['/payments', payment._id, 'confirm']" 
-                class="btn btn-sm btn-primary"
+                class="btn btn-sm btn-primary mr-2"
               >
                 Confirm Receipt
+              </a>
+              <a 
+                *ngIf="payment.status === PaymentStatus.PAID"
+                [routerLink]="['/payments', payment._id, 'confirm']"
+                [queryParams]="{dispute: 'true'}" 
+                class="btn btn-sm btn-danger"
+              >
+                Dispute
               </a>
             </div>
           </div>

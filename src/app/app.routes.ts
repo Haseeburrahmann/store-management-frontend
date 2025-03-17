@@ -72,6 +72,12 @@ export const routes: Routes = [
         data: { requiredPermission: 'payments:read' }
       },
       {
+        path: 'inventory',
+        loadChildren: () => import('./features/inventory/inventory.routes').then(mod => mod.INVENTORY_ROUTES),
+        canActivate: [AuthGuard],
+        data: { requiredPermission: 'stock-requests:read' }
+      },
+      {
         path: 'auth-test',
         loadComponent: () => import('./shared/components/auth-test/auth-test.component').then(m => m.AuthTestComponent)
       },

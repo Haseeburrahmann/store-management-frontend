@@ -42,7 +42,6 @@ export class PaymentService {
     start_date?: string,
     end_date?: string
   } = {}): Observable<PaymentSummary[]> {
-    debugger;
     // First load all stores
     return this.storeService.getStores().pipe(
       switchMap(stores => {
