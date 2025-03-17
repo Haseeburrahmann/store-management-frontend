@@ -5,6 +5,7 @@ import { RouterLink } from '@angular/router';
 import { HoursService } from '../../../../core/services/hours.service';
 import { PermissionService } from '../../../../core/auth/permission.service';
 import { DateTimeUtils } from '../../../../core/utils/date-time-utils.service';
+import { ScheduleShift } from '../../../../shared/models/hours.model';
 
 @Component({
   selector: 'app-schedule-stats-widget',
@@ -69,7 +70,7 @@ export class ScheduleStatsWidgetComponent implements OnInit {
       console.log('Employee role, using employee/me endpoint for schedule stats');
       
       this.hoursService.getMyScheduleShifts().subscribe({
-        next: (shifts) => {
+        next: (shifts: ScheduleShift[]) => {
           const hasShifts = shifts && shifts.length > 0;
           this.hasCurrentSchedule = hasShifts;
           this.shiftsCount = hasShifts ? shifts.length : 0;
@@ -83,7 +84,7 @@ export class ScheduleStatsWidgetComponent implements OnInit {
           
           this.loading = false;
         },
-        error: (err) => {
+        error: (err: any) => {
           console.error('Error loading employee schedule stats:', err);
           this.loading = false;
         }
@@ -116,7 +117,7 @@ export class ScheduleStatsWidgetComponent implements OnInit {
     }
   }
   
-  calculateNextShift(shifts: any[]): void {
+  calculateNextShift(shifts: ScheduleShift[]): void {
     if (!shifts || shifts.length === 0) {
       this.nextShiftInfo = '';
       return;

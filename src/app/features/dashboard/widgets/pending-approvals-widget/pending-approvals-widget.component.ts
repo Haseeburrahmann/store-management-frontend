@@ -8,6 +8,7 @@ import { AuthService } from '../../../../core/auth/auth.service';
 import { IdUtils } from '../../../../core/utils/id-utils.service';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
+import { ScheduleShift } from '../../../../shared/models/hours.model';
 
 @Component({
   selector: 'app-pending-approvals-widget',
@@ -200,13 +201,13 @@ export class PendingApprovalsWidgetComponent implements OnInit {
     // If user is an employee, use the employee-specific endpoint
     if (this.permissionService.getRoleIdentifier() === 'employee') {
       this.hoursService.getMyScheduleShifts().subscribe({
-        next: (shifts) => {
+        next: (shifts: ScheduleShift[]) => {
           const hasShifts = shifts && shifts.length > 0;
           this.hasCurrentSchedule = hasShifts;
           this.currentScheduleShifts = hasShifts ? shifts.length : 0;
           this.loading.schedules = false;
         },
-        error: (err) => {
+        error: (err: any) => {
           console.error('Error loading employee schedule:', err);
           this.loading.schedules = false;
           this.hasCurrentSchedule = false;
